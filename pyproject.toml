@@ -23,7 +23,13 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dynamic = ["version"]
-dependencies = []
+dependencies = [
+    "einops",
+    "numpy",
+    "psygnal",
+    "pydantic",
+    "scipy",
+]
 
 # extras
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
@@ -37,7 +43,7 @@ dev = [
     "cruft",
     "flake8-bugbear",
     "flake8-docstrings",
-    "flake8-pyprojecttoml",
+    "flake8-pyproject",
     "flake8-typing-imports",
     "flake8",
     "ipython",

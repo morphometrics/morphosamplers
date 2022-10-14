@@ -1,4 +1,4 @@
-"""A library for sampling image data along morphological objects such as splines and surfaces."""
+"""A library for sampling image data along morphological objects."""
 
 from importlib.metadata import PackageNotFoundError, version
 
