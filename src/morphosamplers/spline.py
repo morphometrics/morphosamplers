@@ -16,7 +16,7 @@ class NDimensionalSpline(EventedModel):
     order: conint(ge=1, le=5) = 3
     _n_spline_samples: int = 10000
     _raw_spline_tck = PrivateAttr(Tuple)
-    _equidistant_spline_tck = PrivateAttr(Tuple)
+    _equidistance_spline_tck = PrivateAttr(Tuple)
     _length = PrivateAttr(float)
 
     class Config:
@@ -103,7 +103,7 @@ class NDimensionalSpline(EventedModel):
         # prepend a zero, no distance has been covered
         # at start of spline parametrisation
         cumulative_distance = np.r_[[0], cumulative_distance]
-        self._equidistant_spline_tck, _ = splprep(
+        self._equidistance_spline_tck, _ = splprep(
             [u], u=cumulative_distance, s=0, k=self.order
         )
 
@@ -141,7 +141,7 @@ class NDimensionalSpline(EventedModel):
             # derivative order must be 0 < derivative_order < spline_order
             raise ValueError("derivative order must be [0, spline_order]")
         u = np.atleast_1d(u)
-        u = splev([np.asarray(u)], self._equidistant_spline_tck)
+        u = splev([np.asarray(u)], self._equidistance_spline_tck)
         samples = splev(u, self._raw_spline_tck, der=derivative_order)
         return einops.rearrange(samples, "c 1 1 b -> b c")
 
