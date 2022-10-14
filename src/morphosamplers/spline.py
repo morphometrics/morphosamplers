@@ -24,9 +24,9 @@ class NDimensionalSpline(EventedModel):
 
         arbitrary_types_allowed = True
 
-    def __init__(self, points: np.ndarray, order: int = 3, **kwargs: Dict[str, Any]):
+    def __init__(self, points: np.ndarray, order: int = 3):
         """Calculate the splines after validating the paramters."""
-        super().__init__(points=points, order=order, **kwargs)
+        super().__init__(points=points, order=order)
         self._prepare_splines()
 
     @property

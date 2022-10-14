@@ -109,3 +109,18 @@ def test_invalid_number_points(points):
     """Number of points should be greater than the spline order."""
     with pytest.raises(ValidationError):
         _ = NDimensionalSpline(points=points, order=2)
+
+
+@pytest.mark.parametrize("derivative_order", [-1, 4])
+def test_invalid_spline_derivatives(derivative_order):
+    """Derivative order cannot be negative or > spline order."""
+    points = np.array([[0, 1], [1, 1], [1, 3], [1, 5], [1, 7], [1, 10], [1, 20]])
+    spline_model = NDimensionalSpline(points=points, order=3)
+
+    with pytest.raises(ValueError):
+        _ = spline_model._sample_spline(u=0, derivative_order=derivative_order)
+
+    with pytest.raises(ValueError):
+        _ = spline_model._get_equidistant_spline_samples(
+            separation=1, derivative_order=derivative_order
+        )
