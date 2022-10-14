@@ -107,7 +107,7 @@ class NDimensionalSpline(EventedModel):
             [u], u=cumulative_distance, s=0, k=self.order
         )
 
-    def _sample_spline(
+    def sample_spline(
         self, u: Union[float, np.ndarray], derivative_order: int = 0
     ) -> np.ndarray:
         """Sample points or derivatives along the equidistantly sampled spline.
@@ -189,4 +189,4 @@ class NDimensionalSpline(EventedModel):
             # derivative order must be 0 < derivative_order < spline_order
             raise ValueError("derivative order must be [0, spline_order]")
         u = self._get_equidistance_u(separation)
-        return self._sample_spline(u, derivative_order=derivative_order)
+        return self.sample_spline(u, derivative_order=derivative_order)
