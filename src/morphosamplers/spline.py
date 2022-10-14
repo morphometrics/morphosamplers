@@ -66,7 +66,7 @@ class NDimensionalSpline(EventedModel):
         return values
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """Overwrite settattr so the splines are recalculated."""
+        """Overwritten so that splines are recalculated when points are updated."""
         super().__setattr__(name, value)
         if name in ("points", "spline_order"):  # ensure splines stay in sync
             self._prepare_splines()
