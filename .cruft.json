@@ -1,0 +1,22 @@
+{
+  "template": "https://github.com/tlambert03/pyrepo-cookiecutter",
+  "commit": "1458aa53a8bf86bb7365c91c1b3c74546cf42fa8",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "full_name": "Kevin Yamauchi",
+      "email": "kevin.yamauchi@gmail.com",
+      "github_username": "kevinyamauchi",
+      "project_name": "morphosamplers",
+      "project_slug": "morphosamplers",
+      "project_short_description": "A library for sampling image data along morphological objects such as splines and surfaces.",
+      "pypi_username": "kevin.yamauchi",
+      "version_control": "setuptools-scm",
+      "_copy_without_render": [
+        ".github/workflows/*"
+      ],
+      "_template": "https://github.com/tlambert03/pyrepo-cookiecutter"
+    }
+  },
+  "directory": null
+}
