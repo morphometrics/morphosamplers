@@ -94,7 +94,7 @@ def test_spline_model_points_list():
 
 @pytest.mark.parametrize("spline_order", [0.5, -1, 0, 6])
 def test_invalid_spline_order(spline_order):
-    """Spline order must be an integer greater than 0 and < 6."""
+    """Spline order must be an integer in the range [1, 5]."""
     points = np.array([[0, 1], [1, 1], [1, 3], [1, 5], [1, 7], [1, 10], [1, 20]])
     with pytest.raises(ValidationError):
         _ = NDimensionalSpline(points=points, spline_order=spline_order)
