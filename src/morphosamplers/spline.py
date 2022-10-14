@@ -64,7 +64,7 @@ class NDimensionalSpline(EventedModel):
 
     def _prepare_splines(self) -> None:
         self._fit_raw_spline_parameters()
-        self._fit_equidistant_spline_parameters()
+        self._fit_equidistance_spline_parameters()
 
     def _fit_raw_spline_parameters(self) -> None:
         """Spline parametrisation mapping [0, 1] to a smooth curve through spline points.
@@ -74,7 +74,7 @@ class NDimensionalSpline(EventedModel):
         """
         self._raw_spline_tck, _ = splprep(self.points.T, s=0, k=self.order)
 
-    def _fit_equidistant_spline_parameters(self) -> None:
+    def _fit_equidistance_spline_parameters(self) -> None:
         """Calculate a mapping of normalised cumulative distance to linear range [0, 1].
 
         * Normalised cumulative distance is the cumulative euclidean distance along
@@ -145,7 +145,7 @@ class NDimensionalSpline(EventedModel):
         samples = splev(u, self._raw_spline_tck, der=derivative_order)
         return einops.rearrange(samples, "c 1 1 b -> b c")
 
-    def _get_equidistant_u(self, separation: float) -> np.ndarray:
+    def _get_equidistance_u(self, separation: float) -> np.ndarray:
         """Get equally spaced values of u.
 
         Parameters
@@ -162,7 +162,7 @@ class NDimensionalSpline(EventedModel):
         remainder = (self._length % separation) / self._length
         return np.linspace(0, 1 - remainder, n_points)
 
-    def _get_equidistant_spline_samples(
+    def _get_equidistance_spline_samples(
         self, separation: float, derivative_order: bool = 0
     ) -> np.ndarray:
         """Calculate equidistant spline samples with a defined separation.
@@ -188,5 +188,5 @@ class NDimensionalSpline(EventedModel):
         if (derivative_order < 0) or (derivative_order > self.order):
             # derivative order must be 0 < derivative_order < spline_order
             raise ValueError("derivative order must be [0, spline_order]")
-        u = self._get_equidistant_u(separation)
+        u = self._get_equidistance_u(separation)
         return self._sample_spline(u, derivative_order=derivative_order)
