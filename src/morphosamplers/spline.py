@@ -127,10 +127,21 @@ class NDimensionalSpline(EventedModel):
             Order of the derivative to evaluate at each spline position.
             If 0, the position on the spline is returned.
             If >0, the derivative of position is returned (e.g., 1 for tangent vector).
+            derivative_order must be <= the spline order.
             Default value is 0.
+
+        Returns
+        -------
+        values : np.ndarray
+            The values along the spline.
+            If derivative_order is 0, returns positions.
+            If calculate_derivative >0, returns derivative vectors.
         """
+        if (derivative_order < 0) or (derivative_order > self.order):
+            # derivative order must be 0 < derivative_order < spline_order
+            raise ValueError("derivative order must be [0, spline_order]")
         u = np.atleast_1d(u)
-        u = splev([np.asarray(u)], self._equidistant_spline_tck)  # [
+        u = splev([np.asarray(u)], self._equidistant_spline_tck)
         samples = splev(u, self._raw_spline_tck, der=derivative_order)
         return einops.rearrange(samples, "c 1 1 b -> b c")
 
@@ -164,14 +175,18 @@ class NDimensionalSpline(EventedModel):
             Order of the derivative to evaluate at each spline position.
             If 0, the position on the spline is returned.
             If >0, the derivative of position is returned (e.g., 1 for tangent vector).
+            derivative_order must be <= the spline order.
             Default value is 0.
 
         Returns
         -------
         values : np.ndarray
             The values along the spline.
-            If calculate_derivative is False, returns positions.
-            If calculate_derivative is True, returns tangent vectors.
+            If derivative_order is 0, returns positions.
+            If calculate_derivative >0, returns derivative vectors.
         """
+        if (derivative_order < 0) or (derivative_order > self.order):
+            # derivative order must be 0 < derivative_order < spline_order
+            raise ValueError("derivative order must be [0, spline_order]")
         u = self._get_equidistant_u(separation)
         return self._sample_spline(u, derivative_order=derivative_order)
