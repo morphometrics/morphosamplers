@@ -27,7 +27,7 @@ expected_points_4d = np.array([[0, 0, 0.5, 0.5], [0, 0, 1, 1]])
 )
 def test_n_dimensional_spline(points, expected_points):
     """Test NDimensionalSpline for 2D, 3D, and 4D splines."""
-    spline_model = NDimensionalSpline(points=points, spline_order=4)
+    spline_model = NDimensionalSpline(points=points, order=4)
 
     # test that spline order was set
     assert spline_model.order == 4
@@ -46,7 +46,7 @@ def test_update_spline_points():
     """Test that updating the points recalculates the spline."""
     # line with slope 1
     initial_points = np.array([[0, 0], [0.2, 0.2], [0.3, 0.3], [1, 1]])
-    spline_model = NDimensionalSpline(points=initial_points, spline_order=2)
+    spline_model = NDimensionalSpline(points=initial_points, order=2)
 
     value_initial_spline = spline_model._sample_spline(u=0.5)
     np.testing.assert_allclose([[0.5, 0.5]], value_initial_spline)
@@ -67,7 +67,7 @@ def test_update_spline_order():
     y_coordinate = np.power(x_coordinate, 4)
     points = np.column_stack((x_coordinate, y_coordinate))
     initial_spline_order = 2
-    spline_model = NDimensionalSpline(points=points, spline_order=initial_spline_order)
+    spline_model = NDimensionalSpline(points=points, order=initial_spline_order)
 
     # get the value with the initial spline
     value_initial_spline = spline_model._sample_spline(u=0.2)
@@ -89,7 +89,7 @@ def test_spline_model_points_list():
         [1, 1],
         [1, 2],
     ]
-    _ = NDimensionalSpline(points=points, spline_order=1)
+    _ = NDimensionalSpline(points=points, order=1)
 
 
 @pytest.mark.parametrize("spline_order", [0.5, -1, 0, 6])
@@ -97,7 +97,7 @@ def test_invalid_spline_order(spline_order):
     """Spline order must be an integer in the range [1, 5]."""
     points = np.array([[0, 1], [1, 1], [1, 3], [1, 5], [1, 7], [1, 10], [1, 20]])
     with pytest.raises(ValidationError):
-        _ = NDimensionalSpline(points=points, spline_order=spline_order)
+        _ = NDimensionalSpline(points=points, order=spline_order)
 
 
 less_points = np.array([[0, 0]])
@@ -108,4 +108,4 @@ equal_points = np.array([[0, 0], [1, 1]])
 def test_invalid_number_points(points):
     """Number of points should be greater than the spline order."""
     with pytest.raises(ValidationError):
-        _ = NDimensionalSpline(points=points, spline_order=2)
+        _ = NDimensionalSpline(points=points, order=2)

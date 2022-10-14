@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import einops
 import numpy as np
 from psygnal import EventedModel
-from pydantic import PrivateAttr, root_validator, validator
+from pydantic import PrivateAttr, conint, root_validator, validator
 from scipy.interpolate import splev, splprep
 
 
@@ -13,7 +13,7 @@ class NDimensionalSpline(EventedModel):
     """Model for multidimensional splines."""
 
     points: np.ndarray
-    order: int = 3
+    order: conint(ge=1, le=5) = 3
     _n_spline_samples = 10000
     _raw_spline_tck = PrivateAttr(Tuple)
     _equidistant_spline_tck = PrivateAttr(Tuple)
@@ -41,15 +41,6 @@ class NDimensionalSpline(EventedModel):
         if points.ndim != 2:
             raise ValueError("points must be an (n, d) array")
         return points
-
-    @validator("spline_order", pre=True)
-    def validate_spline_order(cls, v: int) -> int:
-        """Validate and coerce spline_order to int."""
-        if not isinstance(v, int):
-            raise TypeError("spline_order must be an integer.")
-        if (v < 1) or (v > 5):
-            raise ValueError("spline_order must be >= 1 and <= 5")
-        return v
 
     @root_validator(skip_on_failure=True)
     def validate_number_of_points(
