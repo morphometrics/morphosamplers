@@ -14,7 +14,7 @@ class NDimensionalSpline(EventedModel):
 
     points: np.ndarray
     order: conint(ge=1, le=5) = 3
-    _n_spline_samples = 10000
+    _n_spline_samples: int = 10000
     _raw_spline_tck = PrivateAttr(Tuple)
     _equidistant_spline_tck = PrivateAttr(Tuple)
     _length = PrivateAttr(float)
@@ -108,7 +108,7 @@ class NDimensionalSpline(EventedModel):
         )
 
     def _sample_spline(
-        self, u: Union[float, np.ndarray], derivative: int = 0
+        self, u: Union[float, np.ndarray], derivative_order: int = 0
     ) -> np.ndarray:
         """Sample points or derivatives along the equidistantly sampled spline.
 
@@ -117,10 +117,21 @@ class NDimensionalSpline(EventedModel):
         * yields equidistant samples along the filament for linearly spaced values of u.
         If calculate_derivate=True then the derivative will be evaluated
          and returned instead of spline points.
+
+        Parameters
+        ----------
+        u : Union[float, np.ndarray]
+            The positions to sample the spline at. These are in the normalized
+            spline coordinate, which spans [0, 1]
+        derivative_order : int
+            Order of the derivative to evaluate at each spline position.
+            If 0, the position on the spline is returned.
+            If >0, the derivative of position is returned (e.g., 1 for tangent vector).
+            Default value is 0.
         """
         u = np.atleast_1d(u)
         u = splev([np.asarray(u)], self._equidistant_spline_tck)  # [
-        samples = splev(u, self._raw_spline_tck, der=derivative)
+        samples = splev(u, self._raw_spline_tck, der=derivative_order)
         return einops.rearrange(samples, "c 1 1 b -> b c")
 
     def _get_equidistant_u(self, separation: float) -> np.ndarray:
@@ -141,7 +152,7 @@ class NDimensionalSpline(EventedModel):
         return np.linspace(0, 1 - remainder, n_points)
 
     def _get_equidistant_spline_samples(
-        self, separation: float, calculate_derivative: bool = False
+        self, separation: float, derivative_order: bool = 0
     ) -> np.ndarray:
         """Calculate equidistant spline samples with a defined separation.
 
@@ -149,9 +160,11 @@ class NDimensionalSpline(EventedModel):
         ----------
         sepration : float
             The distance between points in euclidian space.
-        calculate_derivative : bool
-            Flag set to True to return tangent vectors.
-            Default values is False
+        derivative_order : int
+            Order of the derivative to evaluate at each spline position.
+            If 0, the position on the spline is returned.
+            If >0, the derivative of position is returned (e.g., 1 for tangent vector).
+            Default value is 0.
 
         Returns
         -------
@@ -161,4 +174,4 @@ class NDimensionalSpline(EventedModel):
             If calculate_derivative is True, returns tangent vectors.
         """
         u = self._get_equidistant_u(separation)
-        return self._sample_spline(u, derivative=calculate_derivative)
+        return self._sample_spline(u, derivative_order=derivative_order)
