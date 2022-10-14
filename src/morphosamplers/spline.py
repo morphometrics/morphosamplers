@@ -13,7 +13,7 @@ class NDimensionalSpline(EventedModel):
     """Model for multidimensional splines."""
 
     points: np.ndarray
-    spline_order: int = 3
+    order: int = 3
     _n_spline_samples = 10000
     _raw_spline_tck = PrivateAttr(Tuple)
     _equidistant_spline_tck = PrivateAttr(Tuple)
@@ -58,7 +58,7 @@ class NDimensionalSpline(EventedModel):
         """Verify that the number of points > spline_order."""
         points: np.ndarray = values.get("points")
         n_points = points.shape[0]
-        spline_order: Optional[int] = values.get("spline_order")
+        spline_order: Optional[int] = values.get("order")
 
         if spline_order is not None and n_points <= spline_order:
             raise ValueError("number of points must be greater than spline order")
@@ -68,22 +68,22 @@ class NDimensionalSpline(EventedModel):
     def __setattr__(self, name: str, value: Any) -> None:
         """Overwritten so that splines are recalculated when points are updated."""
         super().__setattr__(name, value)
-        if name in ("points", "spline_order"):  # ensure splines stay in sync
+        if name in ("points", "order"):  # ensure splines stay in sync
             self._prepare_splines()
 
     def _prepare_splines(self) -> None:
-        self._calculate_raw_spline_parameters()
-        self._calculate_equidistant_spline_parameters()
+        self._fit_raw_spline_parameters()
+        self._fit_equidistant_spline_parameters()
 
-    def _calculate_raw_spline_parameters(self) -> None:
+    def _fit_raw_spline_parameters(self) -> None:
         """Spline parametrisation mapping [0, 1] to a smooth curve through spline points.
 
         Note: equidistant sampling of this spline parametrisation will not yield
         equidistant samples in Euclidean space.
         """
-        self._raw_spline_tck, _ = splprep(self.points.T, s=0, k=self.spline_order)
+        self._raw_spline_tck, _ = splprep(self.points.T, s=0, k=self.order)
 
-    def _calculate_equidistant_spline_parameters(self) -> None:
+    def _fit_equidistant_spline_parameters(self) -> None:
         """Calculate a mapping of normalised cumulative distance to linear range [0, 1].
 
         * Normalised cumulative distance is the cumulative euclidean distance along
@@ -113,7 +113,7 @@ class NDimensionalSpline(EventedModel):
         # at start of spline parametrisation
         cumulative_distance = np.r_[[0], cumulative_distance]
         self._equidistant_spline_tck, _ = splprep(
-            [u], u=cumulative_distance, s=0, k=self.spline_order
+            [u], u=cumulative_distance, s=0, k=self.order
         )
 
     def _sample_spline(

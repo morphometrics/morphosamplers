@@ -30,7 +30,7 @@ def test_n_dimensional_spline(points, expected_points):
     spline_model = NDimensionalSpline(points=points, spline_order=4)
 
     # test that spline order was set
-    assert spline_model.spline_order == 4
+    assert spline_model.order == 4
 
     # test samping single point
     sample_values = spline_model._sample_spline(0.5)
@@ -74,7 +74,7 @@ def test_update_spline_order():
 
     # update the spline order and get value at the same point
     updated_spline_order = 4
-    spline_model.spline_order = updated_spline_order
+    spline_model.order = updated_spline_order
     value_updated_spline = spline_model._sample_spline(u=0.2)
 
     with pytest.raises(AssertionError):
