@@ -146,7 +146,7 @@ class Spline3D(NDimensionalSpline):
         r = Rotation.from_matrix(np.stack([x, y, z], axis=-1))
         self._rotation_sampler = Slerp(u, r)
 
-    def _sample_spline_orientations(self, u: np.ndarray):
+    def sample_spline_orientations(self, u: np.ndarray):
         """Local coordinate system at any point along the spline."""
         return self._rotation_sampler(u)
 
