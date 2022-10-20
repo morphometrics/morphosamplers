@@ -121,6 +121,6 @@ def test_invalid_spline_derivatives(derivative_order):
         _ = spline_model.sample_spline(u=0, derivative_order=derivative_order)
 
     with pytest.raises(ValueError):
-        _ = spline_model._get_equidistance_spline_samples(
+        _ = spline_model._get_equidistant_spline_samples(
             separation=1, derivative_order=derivative_order
         )
