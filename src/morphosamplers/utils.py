@@ -84,4 +84,48 @@ def align_orientations_to_z_vectors(orientations, vectors):
     return Rotation.concatenate(aligned)
 
 
-# equidistant but keep edges is needed for surface!
+def minimize_point_strips_pair_distance(strips, crop=True):
+    """Minimize average pair distance at the same index between any number of point strips.
+
+    Rolls and pads with nans each strip in order to minimize the euclidean distance
+    of each point in the strip relative to the points at the same index in the
+    neighbouring strips. If crop is true, crop to non-nan content instead of padding.
+    """
+    min_idx = 0
+    max_idx = max(len(s) for s in strips)
+    offsets = [0]
+    for arr, next in zip(strips, strips[1:]):
+        arr_padded = np.pad(arr, ((len(next), len(next)), (0, 0)), constant_values=np.nan)
+        next_padded = np.pad(next, ((0, len(next) + len(arr)), (0, 0)), constant_values=np.nan)
+        tot_len = len(next) + len(arr) + len(next)
+        best_roll_idx = None
+        best_dist = None
+        for i in range(tot_len):
+            next_rolled = np.roll(next_padded, i, axis=0)
+            roll_dist = np.linalg.norm(arr_padded - next_rolled, axis=1)
+            avg_dist = np.nanmean(roll_dist)
+            if np.isnan(avg_dist):
+                continue
+            if best_dist is None or avg_dist < best_dist:
+                best_dist = avg_dist
+                best_roll_idx = i
+        offset = best_roll_idx - len(next)
+        total_offset = offset + offsets[-1]
+        print(total_offset)
+        offsets.append(total_offset)
+        if total_offset > min_idx:
+            min_idx = total_offset
+        if (total_offset + len(next)) < max_idx:
+            max_idx = total_offset + len(next)
+    print(min_idx, max_idx)
+    # print(offsets)
+
+    # construct final padded arrays
+    aligned = []
+    for arr, offset in zip(strips, offsets):
+        print(arr, offset)
+        # left_pad = offset - min_idx
+        # right_pad = max_idx - offset - len(arr)
+        # padded = np.pad(arr, ((left_pad, right_pad), (0, 0)), constant_values=np.nan)
+        # aligned.append(padded)
+    # return aligned
