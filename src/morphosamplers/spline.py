@@ -202,12 +202,13 @@ class Spline3D(NDimensionalSpline):
     In this coordinate system, z vectors are tangent to the spline and the xy-plane
     changes minimally and smoothly.
     """
+
     _rotation_sampler = PrivateAttr(Slerp)
 
-    @validator('points')
-    def _is_n_plus_3d_coordinate_array(cls, v):
+    @validator("points")
+    def _is_3d_coordinate_array(cls, v):
         if v.ndim != 2 or v.shape[-1] != 3:
-            raise ValueError('must be an (n, 3) array')
+            raise ValueError("must be an (n, 3) array")
         return v
 
     def _prepare_splines(self):
@@ -215,8 +216,7 @@ class Spline3D(NDimensionalSpline):
         self._fit_equidistance_orientation_slerp()
 
     def _fit_equidistance_orientation_slerp(self):
-        """Slerp parametrisation mapping [0, 1] to smoothly varying orientations
-        along the spline.
+        """Slerp parametrisation mapping [0, 1] to smoothly varying orientations.
 
         Yields samples that are smoothly varying in euclidean space for linearly
         spaced values of u.
