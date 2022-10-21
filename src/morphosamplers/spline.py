@@ -165,6 +165,14 @@ class NDimensionalSpline(EventedModel):
         remainder = (self._length % separation) / self._length
         return np.linspace(0, 1 - remainder, n_points)
 
+    def _get_approximate_equidistance_u(self, separation: float) -> np.ndarray:
+        """Equally spaced values of u separated by approximately separation.
+
+        Extrema are maintained.
+        """
+        n_points = int(self._length / separation)
+        return np.linspace(0, 1, n_points)
+
     def _get_equidistance_spline_samples(
         self, separation: float, derivative_order: int = 0
     ) -> np.ndarray:
@@ -192,6 +200,15 @@ class NDimensionalSpline(EventedModel):
             # derivative order must be 0 < derivative_order < spline_order
             raise ValueError("derivative order must be [0, spline_order]")
         u = self._get_equidistance_u(separation)
+        return self.sample_spline(u, derivative_order=derivative_order)
+
+    def _get_approximate_equidistance_spline_samples(
+        self, separation: float, derivative_order: int = 0
+    ) -> np.ndarray:
+        if (derivative_order < 0) or (derivative_order > self.order):
+            # derivative order must be 0 < derivative_order < spline_order
+            raise ValueError("derivative order must be [0, spline_order]")
+        u = self._get_approximate_equidistance_u(separation)
         return self.sample_spline(u, derivative_order=derivative_order)
 
 
@@ -246,4 +263,8 @@ class Spline3D(NDimensionalSpline):
     def _get_equidistant_orientations(self, separation: float) -> Rotation:
         """Calculate orientations for equidistant samples with a defined separation."""
         u = self._get_equidistant_u(separation)
+        return self._sample_spline_orientations(u)
+
+    def _get_approximate_equidistance_orientations(self, separation: float) -> Rotation:
+        u = self._get_approximate_equidistance_u(separation)
         return self._sample_spline_orientations(u)
