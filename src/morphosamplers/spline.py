@@ -260,9 +260,9 @@ class Spline3D(NDimensionalSpline):
         rotations = self._sample_spline_orientations(u)
         return rotations.as_matrix()[..., 1]
 
-    def _get_equidistant_orientations(self, separation: float) -> Rotation:
+    def _get_equidistance_orientations(self, separation: float) -> Rotation:
         """Calculate orientations for equidistant samples with a defined separation."""
-        u = self._get_equidistant_u(separation)
+        u = self._get_equidistance_u(separation)
         return self._sample_spline_orientations(u)
 
     def _get_approximate_equidistance_orientations(self, separation: float) -> Rotation:

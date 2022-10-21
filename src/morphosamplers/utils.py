@@ -46,27 +46,26 @@ def deduplicate_points(coords: np.ndarray, exclusion_radius: float) -> np.ndarra
     """Remove "duplicates" points from an array of coordinates.
 
     Points are clustered with their neighbours if they are closer than exclusion_radius.
-    Points are iteratively removed from each cluster,
-    prioritizing keeping hub-like points.
+    Clusters are iteratively replaced with their centroid until no clusters remain.
     """
-    tree = KDTree(coords)
-    clusters = tree.query_ball_point(coords, exclusion_radius, workers=-1)
-    clusters_sorted = sorted(clusters, key=len, reverse=True)
-
-    duplicates = []
-    visited = []
-    for cluster in clusters_sorted:
-        if len(cluster) == 1:
+    coords = coords.copy()
+    while True:
+        tree = KDTree(coords)
+        # get clusters sorted by size (biggest first)
+        clusters = tree.query_ball_point(coords, exclusion_radius, workers=-1)
+        clusters_sorted = sorted(clusters, key=len, reverse=True)
+        biggest = clusters_sorted[0]
+        if len(biggest) == 1:
+            # we reached the degenerate clusters of points with themselves
             break
-        duplicates_in_cluster = [el for el in cluster[1:] if el not in visited]
-        duplicates.extend(duplicates_in_cluster)
-        visited.append(cluster[0])
+        centroid = np.mean(coords[biggest], axis=0)
+        coords[biggest[0]] = centroid
 
-    duplicates = np.array(sorted(list(set(duplicates)))).astype(int)
-    mask = np.ones(len(coords), dtype=bool)
-    mask[duplicates] = False
+        mask = np.ones(len(coords), np.bool)
+        mask[biggest[1:]] = False
+        coords = coords[mask]
 
-    return coords[mask]
+    return coords
 
 
 def generate_surface_normals(surface_points, inside_point):
@@ -87,9 +86,12 @@ def align_orientations_to_z_vectors(orientations, vectors):
 def minimize_point_strips_pair_distance(strips, crop=True):
     """Minimize average pair distance at the same index between any number of point strips.
 
-    Rolls and pads with nans each strip in order to minimize the euclidean distance
+    Rolls each strip in order to minimize the euclidean distance
     of each point in the strip relative to the points at the same index in the
-    neighbouring strips. If crop is true, crop to non-nan content instead of padding.
+    neighbouring strips.
+
+    If crop is True, crop all the strips so there are only valid values.
+    Otherwise, strips are padded with their edge values.
     """
     min_idx = 0
     max_idx = max(len(s) for s in strips)
@@ -111,21 +113,21 @@ def minimize_point_strips_pair_distance(strips, crop=True):
                 best_roll_idx = i
         offset = best_roll_idx - len(next)
         total_offset = offset + offsets[-1]
-        print(total_offset)
         offsets.append(total_offset)
-        if total_offset > min_idx:
-            min_idx = total_offset
-        if (total_offset + len(next)) < max_idx:
-            max_idx = total_offset + len(next)
-    print(min_idx, max_idx)
-    # print(offsets)
 
-    # construct final padded arrays
+    # construct final aligned arrays
     aligned = []
-    for arr, offset in zip(strips, offsets):
-        print(arr, offset)
-        # left_pad = offset - min_idx
-        # right_pad = max_idx - offset - len(arr)
-        # padded = np.pad(arr, ((left_pad, right_pad), (0, 0)), constant_values=np.nan)
-        # aligned.append(padded)
-    # return aligned
+
+    if crop:
+        min_idx = max(offsets)
+        max_idx = min(o + len(a) for o, a in zip(offsets, strips))
+        for arr, offset in zip(strips, offsets):
+            cropped = arr[min_idx - offset:max_idx - offset]
+            aligned.append(cropped)
+    else:
+        min_idx = min(offsets)
+        max_idx = max(o + len(a) for o, a in zip(offsets, strips))
+        for arr, offset in zip(strips, offsets):
+            padded = np.pad(arr, ((offset - min_idx, max_idx - offset - len(arr)), (0, 0)), mode='edge')
+            aligned.append(padded)
+    return aligned
