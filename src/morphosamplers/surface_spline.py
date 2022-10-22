@@ -6,7 +6,7 @@ import numpy as np
 from psygnal import EventedModel
 from pydantic import PrivateAttr, conint
 
-from .spline import NDimensionalSpline
+from .spline import Spline3D
 from .utils import align_orientations_to_z_vectors, generate_surface_normals, minimize_point_strips_pair_distance, deduplicate_points
 
 
@@ -15,7 +15,7 @@ class SurfaceSpline(EventedModel):
 
     points: np.ndarray
     order: conint(ge=1, le=5) = 3
-    _splines = PrivateAttr(List[NDimensionalSpline])
+    _splines = PrivateAttr(List[Spline3D])
 
     class Config:
         """Pydantic BaseModel configuration."""
@@ -31,7 +31,7 @@ class SurfaceSpline(EventedModel):
         z_change_indices = np.where(np.diff(self.points[:, 2]))[0] + 1
         points_per_spline = np.split(self.points, z_change_indices)
         self._splines = [
-            NDimensionalSpline(p, order=self.order) for p in points_per_spline
+            Spline3D(p, order=self.order) for p in points_per_spline
         ]
 
     def _generate_cross_splines(self, separation):
@@ -42,7 +42,7 @@ class SurfaceSpline(EventedModel):
         aligned = minimize_point_strips_pair_distance(equidistant_points, crop=False)
         cross_spline_points = np.stack(aligned, axis=1)
         cross_splines = [
-            NDimensionalSpline(p, order=self.order) for p in cross_spline_points
+            Spline3D(p, order=self.order) for p in cross_spline_points
         ]
         return cross_splines
 
@@ -75,14 +75,63 @@ class SurfaceSpline(EventedModel):
         return align_orientations_to_z_vectors(equidistant_orientations, normals)
 
     def _generate_grid_cross_splines(self, separation):
-        equidistant_points = [
-            spline._get_approximate_equidistance_spline_samples(separation)
+        us = [
+            spline._get_approximate_equidistance_u(separation)
             for spline in self._splines
         ]
-        aligned = minimize_point_strips_pair_distance(equidistant_points, crop=True)
-        cross_spline_points = np.stack(aligned, axis=1)
+        equidistant_points = [
+            spline.sample_spline(u)
+            for spline, u in zip(self._splines, us)
+        ]
+        equidistant_directions = [
+            spline.sample_spline(u, derivative_order=1)
+            for spline, u in zip(self._splines, us)
+        ]
+        aligned = minimize_point_strips_pair_distance(equidistant_points, mode='nan')
+
+        # extend with vectors
+        extended_with_vectors = []
+        for pts, directions in zip(aligned, equidistant_directions):
+            nans = np.isnan(pts[:, 0])
+            left_pad = np.argmax(~nans)
+            left_dir = -directions[0]
+            left_shift = left_dir / np.linalg.norm(left_dir) * separation
+            right_pad = np.argmax(~nans[::-1])
+            right_dir = directions[-1]
+            right_shift = right_dir / np.linalg.norm(right_dir) * separation
+            left_extension = pts[left_pad] + left_shift * np.arange(left_pad, 0, -1).reshape(-1, 1)
+            right_extension = pts[-right_pad - 1] + right_shift * np.arange(1, right_pad + 1).reshape(-1, 1)
+            extended = np.concatenate([left_extension, pts[left_pad:-right_pad or None], right_extension])
+            extended_with_vectors.append(extended)
+        extended_with_vectors = np.stack(extended_with_vectors, axis=1)
+
+        # extend with cross mean
+        extended_with_cross_mean = []
+        all_z_values = np.stack(aligned, axis=1)[:, :, 2]
+        z_values = np.nanmean(all_z_values, axis=0)
+        for cross_pts in np.stack(aligned, axis=1):
+            nans = np.isnan(cross_pts[:, 0])
+            nan_idx = np.where(np.isnan(cross_pts[:, 0]))[0]
+            val_idx = np.where(~np.isnan(cross_pts[:, 0]))[0]
+            if len(val_idx) == 1:
+                # cannot interpolate with a single value, just leave all nans
+                extended_with_cross_mean.append(cross_pts)
+                continue
+            x, y, _ = cross_pts.T
+            interpolated = []
+            for coord in (x, y):
+                fill_values = np.interp(nan_idx, val_idx, coord[val_idx])
+                filled = coord.copy()
+                filled[nan_idx] = fill_values
+                interpolated.append(filled)
+            interpolated.append(z_values)
+            interpolated = np.stack(interpolated, axis=1)
+            extended_with_cross_mean.append(interpolated)
+        extended_with_cross_mean = np.array(extended_with_cross_mean)
+
+        cross_spline_control_points = np.nanmean([extended_with_vectors, extended_with_cross_mean], axis=0)
         cross_splines = [
-            NDimensionalSpline(p, order=self.order) for p in cross_spline_points
+            Spline3D(p, order=self.order) for p in cross_spline_control_points
         ]
         return cross_splines
 

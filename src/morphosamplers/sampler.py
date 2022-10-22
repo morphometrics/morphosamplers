@@ -110,3 +110,7 @@ def sample_image_subvolumes(
     return sample_image_with_coordinates(
         image, sampling_coords, image_interpolation_order=image_interpolation_order
     )
+
+
+def sample_image_around_surface(image, surface: SurfaceSpline):
+    pass

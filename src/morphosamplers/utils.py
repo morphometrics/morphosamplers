@@ -83,16 +83,20 @@ def align_orientations_to_z_vectors(orientations, vectors):
     return Rotation.concatenate(aligned)
 
 
-def minimize_point_strips_pair_distance(strips, crop=True):
+def minimize_point_strips_pair_distance(strips, mode='crop'):
     """Minimize average pair distance at the same index between any number of point strips.
 
     Rolls each strip in order to minimize the euclidean distance
     of each point in the strip relative to the points at the same index in the
     neighbouring strips.
 
-    If crop is True, crop all the strips so there are only valid values.
-    Otherwise, strips are padded with their edge values.
+    If mode is crop, crop all the strips so there are only valid values.
+    Otherwise, strips are padded with either their edge value or nans.
     """
+    modes = ('crop', 'nan', 'edge')
+    if mode not in modes:
+        raise ValueError(f'mode must be one of: {modes}')
+
     min_idx = 0
     max_idx = max(len(s) for s in strips)
     offsets = [0]
@@ -118,16 +122,25 @@ def minimize_point_strips_pair_distance(strips, crop=True):
     # construct final aligned arrays
     aligned = []
 
-    if crop:
+    if mode == 'crop':
         min_idx = max(offsets)
         max_idx = min(o + len(a) for o, a in zip(offsets, strips))
         for arr, offset in zip(strips, offsets):
             cropped = arr[min_idx - offset:max_idx - offset]
             aligned.append(cropped)
     else:
+        if mode == 'edge':
+            kwargs = {'mode': 'edge'}
+        elif mode == 'nan':
+            kwargs = {'mode': 'constant', 'constant_values': np.nan}
         min_idx = min(offsets)
         max_idx = max(o + len(a) for o, a in zip(offsets, strips))
         for arr, offset in zip(strips, offsets):
-            padded = np.pad(arr, ((offset - min_idx, max_idx - offset - len(arr)), (0, 0)), mode='edge')
+            padded = np.pad(arr, ((offset - min_idx, max_idx - offset - len(arr)), (0, 0)), **kwargs)
             aligned.append(padded)
     return aligned
+
+
+def extend_aligned_strips(strips, z_vectors, separation):
+    for s, z in zip(strips, z_vectors):
+        pass
