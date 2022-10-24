@@ -162,6 +162,9 @@ class NDimensionalSpline(EventedModel):
             The array of equally-spaced spline coordinates..
         """
         n_points = int(self._length // separation)
+        if n_points == 0:
+            raise ValueError(f'separation ({separation}) must be less than '
+                             f'length ({self._length})')
         remainder = (self._length % separation) / self._length
         return np.linspace(0, 1 - remainder, n_points)
 
@@ -228,22 +231,25 @@ class Spline3D(NDimensionalSpline):
         r = Rotation.from_matrix(np.stack([x, y, z], axis=-1))
         self._rotation_sampler = Slerp(u, r)
 
-    def sample_spline_orientations(self, u: np.ndarray):
+    def sample_spline_orientations(self, u: Union[float, np.ndarray]):
         """Local coordinate system at any point along the spline."""
-        return self._rotation_sampler(u)
+        rot = self._rotation_sampler(u)
+        if rot.single:
+            rot = Rotation.concatenate([rot])
+        return rot
 
-    def _sample_spline_z(self, u: np.ndarray) -> np.ndarray:
+    def _sample_spline_z(self, u: Union[float, np.ndarray]) -> np.ndarray:
         """Sample vectors tangent to the spline."""
         z = self.sample_spline(u, derivative_order=1)
         z /= np.linalg.norm(z, axis=1, keepdims=True)
         return z
 
-    def _sample_spline_y(self, u: np.ndarray) -> np.ndarray:
+    def _sample_spline_y(self, u: Union[float, np.ndarray]) -> np.ndarray:
         """Sample vectors perpendicular to the spline."""
-        rotations = self._sample_spline_orientations(u)
+        rotations = self.sample_spline_orientations(u)
         return rotations.as_matrix()[..., 1]
 
-    def _get_equidistant_orientations(self, separation: float) -> Rotation:
+    def _get_equidistance_orientations(self, separation: float) -> Rotation:
         """Calculate orientations for equidistant samples with a defined separation."""
-        u = self._get_equidistant_u(separation)
-        return self._sample_spline_orientations(u)
+        u = self._get_equidistance_u(separation)
+        return self.sample_spline_orientations(u)
