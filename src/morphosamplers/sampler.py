@@ -77,7 +77,7 @@ def generate_sampling_coordinates(
     """
     Copy and transform a given sampling grid onto a set of positions and orientations.
 
-    Returns an (n, *grid_shape, 3) grid of sampling points.
+    Returns a (batch, *grid_shape, 3) batch of coordinate grids for sampling.
 
     Parameters
     ----------
@@ -97,22 +97,22 @@ def generate_sampling_coordinates(
     grid_shape = sampling_grid.shape
     grid_coords = sampling_grid.reshape(-1, 3)
     # apply each orientation to the grid and store the result
-    for ori in orientations:
-        rotated.append(ori.apply(grid_coords))
+    for orientation in orientations:
+        rotated.append(orientation.apply(grid_coords))
     # shift each rotated
     rotated_shifted = np.stack(rotated, axis=1) + positions
     return rotated_shifted.reshape(-1, *grid_shape)
 
 
-def sample_volume_with_coordinates(
+def sample_volume_at_coordinates(
     volume: np.ndarray, coordinates: np.ndarray, interpolation_order: int = 3
 ) -> np.ndarray:
     """
     Sample a volume with spline interpolation at specific coordinates.
 
     The output shape is determined by the input coordinate shape such that
-    if coordinates have shape (n_samples, *grid_shape, 3), the output array will have
-    shape (*grid_shape, n_samples).
+    if coordinates have shape (batch, *grid_shape, 3), the output array will have
+    shape (*grid_shape, batch).
 
     Parameters
     ----------
@@ -120,7 +120,7 @@ def sample_volume_with_coordinates(
         Volume to be sampled.
     coordinates : np.ndarray
         Array of coordinates at which to sample the volume. The shape of this array
-        should be (n_samples, *grid_shape, 3) to allow reshaping back correctly
+        should be (batch, *grid_shape, 3) to allow reshaping back correctly
     interpolation_order : int
         Spline order for image interpolation.
 
@@ -129,20 +129,20 @@ def sample_volume_with_coordinates(
     np.ndarray
         Array of shape (*grid_shape)
     """
-    n_samples, *grid_shape, _ = coordinates.shape
+    batch, *grid_shape, _ = coordinates.shape
     # map_coordinates wants transposed coordinate array
     sampled_volume = map_coordinates(
         volume, coordinates.reshape(-1, 3).T, order=interpolation_order
     )
     # reshape back (need to invert due to previous transposition)
-    # and retranspose to get n_samples back to the 0th dimension
-    return np.swapaxes(sampled_volume.reshape(*grid_shape, n_samples), -1, 0)
+    # and retranspose to get batch back to the 0th dimension
+    return np.swapaxes(sampled_volume.reshape(*grid_shape, batch), -1, 0)
 
 
 def sample_volume_along_spline(
     volume: np.ndarray,
     spline: Spline3D,
-    n_samples: int = 100,
+    batch: int = 100,
     grid_shape: Tuple[int, int] = (10, 10),
     grid_spacing: Tuple[int, int] = (1, 1),
     interpolation_order: int = 3,
@@ -156,7 +156,7 @@ def sample_volume_along_spline(
         Volume to be sampled.
     spline : Spline3D
         Spline object along which to sample the volume.
-    n_samples : int
+    batch : int
         Number of samples to take along the spline.
     grid_shape : Tuple[int, int]
         Shape of the 2D grid.
@@ -170,12 +170,12 @@ def sample_volume_along_spline(
     np.ndarray
         Sampled volume.
     """
-    u = np.linspace(0, 1, n_samples)
+    u = np.linspace(0, 1, batch)
     positions = spline.sample_spline(u)
     orientations = spline.sample_spline_orientations(u)
     grid = generate_2D_grid(grid_shape=grid_shape, grid_spacing=grid_spacing)
     sampling_coords = generate_sampling_coordinates(grid, positions, orientations)
-    return sample_volume_with_coordinates(
+    return sample_volume_at_coordinates(
         volume, sampling_coords, interpolation_order=interpolation_order
     )
 
@@ -213,6 +213,6 @@ def sample_volume_subvolumes(
     """
     grid = generate_3D_grid(grid_shape=grid_shape, grid_spacing=grid_spacing)
     sampling_coords = generate_sampling_coordinates(grid, positions, orientations)
-    return sample_volume_with_coordinates(
+    return sample_volume_at_coordinates(
         volume, sampling_coords, interpolation_order=interpolation_order
     )
