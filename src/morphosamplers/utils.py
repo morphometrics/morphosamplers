@@ -67,7 +67,7 @@ def deduplicate_points(coords: np.ndarray, exclusion_radius: float) -> np.ndarra
     return coords
 
 
-def minimize_point_strips_pair_distance(strips, mode='crop'):
+def minimize_point_strips_pair_distance(strips, mode="crop"):
     """Minimize average pair distance at the same index between any number of point strips.
 
     Rolls each strip in order to minimize the euclidean distance
@@ -77,16 +77,20 @@ def minimize_point_strips_pair_distance(strips, mode='crop'):
     If mode is crop, crop all the strips so there are only valid values.
     Otherwise, strips are padded with either their edge value or nans.
     """
-    modes = ('crop', 'nan', 'edge')
+    modes = ("crop", "nan", "edge")
     if mode not in modes:
-        raise ValueError(f'mode must be one of: {modes}')
+        raise ValueError(f"mode must be one of: {modes}")
 
     min_idx = 0
     max_idx = max(len(s) for s in strips)
     offsets = [0]
     for arr, next in zip(strips, strips[1:]):
-        arr_padded = np.pad(arr, ((len(next), len(next)), (0, 0)), constant_values=np.nan)
-        next_padded = np.pad(next, ((0, len(next) + len(arr)), (0, 0)), constant_values=np.nan)
+        arr_padded = np.pad(
+            arr, ((len(next), len(next)), (0, 0)), constant_values=np.nan
+        )
+        next_padded = np.pad(
+            next, ((0, len(next) + len(arr)), (0, 0)), constant_values=np.nan
+        )
         tot_len = len(next) + len(arr) + len(next)
         best_roll_idx = None
         best_dist = None
@@ -106,39 +110,78 @@ def minimize_point_strips_pair_distance(strips, mode='crop'):
     # construct final aligned arrays
     aligned = []
 
-    if mode == 'crop':
+    if mode == "crop":
         min_idx = max(offsets)
         max_idx = min(o + len(a) for o, a in zip(offsets, strips))
         for arr, offset in zip(strips, offsets):
-            cropped = arr[min_idx - offset:max_idx - offset]
+            cropped = arr[min_idx - offset : max_idx - offset]
             aligned.append(cropped)
     else:
-        if mode == 'edge':
-            kwargs = {'mode': 'edge'}
-        elif mode == 'nan':
-            kwargs = {'mode': 'constant', 'constant_values': np.nan}
+        if mode == "edge":
+            kwargs = {"mode": "edge"}
+        elif mode == "nan":
+            kwargs = {"mode": "constant", "constant_values": np.nan}
         min_idx = min(offsets)
         max_idx = max(o + len(a) for o, a in zip(offsets, strips))
         for arr, offset in zip(strips, offsets):
-            padded = np.pad(arr, ((offset - min_idx, max_idx - offset - len(arr)), (0, 0)), **kwargs)
+            padded = np.pad(
+                arr, ((offset - min_idx, max_idx - offset - len(arr)), (0, 0)), **kwargs
+            )
             aligned.append(padded)
     return aligned
 
 
-def extrapolate_point_strip(strip, directions, separation):
+def extrapolate_point_strips_with_direction(strips, directions, separation):
     """
-    Extrapolate spline samples padded with nans.
+    Extrapolate point strips padded with nans by continuing along a direction.
 
     Extrapolates beyond the first and last finite value in strip continuing
     in the correct direction and spacing by separation.
     """
-    nans = np.isnan(strip[:, 0])
-    left_pad = np.argmax(~nans)
-    left_dir = -directions[0]
-    left_shift = left_dir / np.linalg.norm(left_dir) * separation
-    right_pad = np.argmax(~nans[::-1])
-    right_dir = directions[-1]
-    right_shift = right_dir / np.linalg.norm(right_dir) * separation
-    left_extension = strip[left_pad] + left_shift * np.arange(left_pad, 0, -1).reshape(-1, 1)
-    right_extension = strip[-right_pad - 1] + right_shift * np.arange(1, right_pad + 1).reshape(-1, 1)
-    return np.concatenate([left_extension, strip[left_pad:-right_pad or None], right_extension])
+    extrapolated = []
+    for strip, dir in zip(strips, directions):
+        nans = np.isnan(strip[:, 0])
+        left_pad = np.argmax(~nans)
+        left_dir = -dir[0]
+        left_shift = left_dir / np.linalg.norm(left_dir) * separation
+        right_pad = np.argmax(~nans[::-1])
+        right_dir = dir[-1]
+        right_shift = right_dir / np.linalg.norm(right_dir) * separation
+        left_extension = strip[left_pad] + left_shift * np.arange(
+            left_pad, 0, -1
+        ).reshape(-1, 1)
+        right_extension = strip[-right_pad - 1] + right_shift * np.arange(
+            1, right_pad + 1
+        ).reshape(-1, 1)
+        padded = np.concatenate(
+            [left_extension, strip[left_pad : -right_pad or None], right_extension]
+        )
+        extrapolated.append(padded)
+    return extrapolated
+
+
+def interpolate_and_extrapolate_point_strips(strips):
+    """
+    Extrapolate and interpolate a point strip containing nan values.
+
+    Perform simple linear interpolation when possible, or if only one value
+    is available, duplicates it.
+    """
+    extended_with_cross_mean = []
+    all_z_values = np.stack(strips, axis=1)[:, :, 2]
+    z_values = np.nanmean(all_z_values, axis=0)
+    for cross_pts in np.stack(strips, axis=1):
+        nans = np.isnan(cross_pts[:, 0])
+        nan_idx = np.where(nans)[0]
+        val_idx = np.where(~nans)[0]
+        x, y, _ = cross_pts.T
+        interpolated = []
+        for coord in (x, y):
+            fill_values = np.interp(nan_idx, val_idx, coord[val_idx])
+            filled = coord.copy()
+            filled[nan_idx] = fill_values
+            interpolated.append(filled)
+        interpolated.append(z_values)
+        interpolated = np.stack(interpolated, axis=1)
+        extended_with_cross_mean.append(interpolated)
+    return extended_with_cross_mean
