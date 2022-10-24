@@ -77,7 +77,7 @@ def generate_sampling_coordinates(
     """
     Copy and transform a given sampling grid onto a set of positions and orientations.
 
-    Returns an (n, *grid_shape, 3) grid of sampling points.
+    Returns a (batch, *grid_shape, 3) batch of coordinate grids for sampling.
 
     Parameters
     ----------
@@ -97,14 +97,14 @@ def generate_sampling_coordinates(
     grid_shape = sampling_grid.shape
     grid_coords = sampling_grid.reshape(-1, 3)
     # apply each orientation to the grid and store the result
-    for ori in orientations:
-        rotated.append(ori.apply(grid_coords))
+    for orientation in orientations:
+        rotated.append(orientation.apply(grid_coords))
     # shift each rotated
     rotated_shifted = np.stack(rotated, axis=1) + positions
     return rotated_shifted.reshape(-1, *grid_shape)
 
 
-def sample_volume_with_coordinates(
+def sample_volume_at_coordinates(
     volume: np.ndarray, coordinates: np.ndarray, interpolation_order: int = 3
 ) -> np.ndarray:
     """
