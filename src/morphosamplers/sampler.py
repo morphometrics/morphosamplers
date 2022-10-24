@@ -175,7 +175,7 @@ def sample_volume_along_spline(
     orientations = spline.sample_spline_orientations(u)
     grid = generate_2D_grid(grid_shape=grid_shape, grid_spacing=grid_spacing)
     sampling_coords = generate_sampling_coordinates(grid, positions, orientations)
-    return sample_volume_with_coordinates(
+    return sample_volume_at_coordinates(
         volume, sampling_coords, interpolation_order=interpolation_order
     )
 
@@ -213,6 +213,6 @@ def sample_volume_subvolumes(
     """
     grid = generate_3D_grid(grid_shape=grid_shape, grid_spacing=grid_spacing)
     sampling_coords = generate_sampling_coordinates(grid, positions, orientations)
-    return sample_volume_with_coordinates(
+    return sample_volume_at_coordinates(
         volume, sampling_coords, interpolation_order=interpolation_order
     )
