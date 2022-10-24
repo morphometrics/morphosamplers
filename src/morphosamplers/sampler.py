@@ -111,8 +111,8 @@ def sample_volume_at_coordinates(
     Sample a volume with spline interpolation at specific coordinates.
 
     The output shape is determined by the input coordinate shape such that
-    if coordinates have shape (n_samples, *grid_shape, 3), the output array will have
-    shape (*grid_shape, n_samples).
+    if coordinates have shape (batch, *grid_shape, 3), the output array will have
+    shape (*grid_shape, batch).
 
     Parameters
     ----------
@@ -120,7 +120,7 @@ def sample_volume_at_coordinates(
         Volume to be sampled.
     coordinates : np.ndarray
         Array of coordinates at which to sample the volume. The shape of this array
-        should be (n_samples, *grid_shape, 3) to allow reshaping back correctly
+        should be (batch, *grid_shape, 3) to allow reshaping back correctly
     interpolation_order : int
         Spline order for image interpolation.
 
@@ -129,20 +129,20 @@ def sample_volume_at_coordinates(
     np.ndarray
         Array of shape (*grid_shape)
     """
-    n_samples, *grid_shape, _ = coordinates.shape
+    batch, *grid_shape, _ = coordinates.shape
     # map_coordinates wants transposed coordinate array
     sampled_volume = map_coordinates(
         volume, coordinates.reshape(-1, 3).T, order=interpolation_order
     )
     # reshape back (need to invert due to previous transposition)
-    # and retranspose to get n_samples back to the 0th dimension
-    return np.swapaxes(sampled_volume.reshape(*grid_shape, n_samples), -1, 0)
+    # and retranspose to get batch back to the 0th dimension
+    return np.swapaxes(sampled_volume.reshape(*grid_shape, batch), -1, 0)
 
 
 def sample_volume_along_spline(
     volume: np.ndarray,
     spline: Spline3D,
-    n_samples: int = 100,
+    batch: int = 100,
     grid_shape: Tuple[int, int] = (10, 10),
     grid_spacing: Tuple[int, int] = (1, 1),
     interpolation_order: int = 3,
@@ -156,7 +156,7 @@ def sample_volume_along_spline(
         Volume to be sampled.
     spline : Spline3D
         Spline object along which to sample the volume.
-    n_samples : int
+    batch : int
         Number of samples to take along the spline.
     grid_shape : Tuple[int, int]
         Shape of the 2D grid.
@@ -170,7 +170,7 @@ def sample_volume_along_spline(
     np.ndarray
         Sampled volume.
     """
-    u = np.linspace(0, 1, n_samples)
+    u = np.linspace(0, 1, batch)
     positions = spline.sample_spline(u)
     orientations = spline.sample_spline_orientations(u)
     grid = generate_2D_grid(grid_shape=grid_shape, grid_spacing=grid_spacing)
