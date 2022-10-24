@@ -5,7 +5,6 @@ from typing import Optional
 
 import numpy as np
 from scipy.spatial import KDTree
-from scipy.spatial.transform import Rotation
 
 
 def calculate_y_vectors_from_z_vectors(
@@ -68,21 +67,6 @@ def deduplicate_points(coords: np.ndarray, exclusion_radius: float) -> np.ndarra
     return coords
 
 
-def generate_surface_normals(surface_points, inside_point):
-    """Generate normal vectors for points on a surface based on a point inside."""
-    vectors = surface_points - inside_point
-    return vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
-
-
-def align_orientations_to_z_vectors(orientations, vectors):
-    """Align orientations to given z vectors with minimal change."""
-    z = np.array([[0, 0, 1]])
-    aligned = []
-    for ori, vec in zip(orientations, vectors):
-        aligned.append(ori.align_vectors(z, np.atleast_2d(vec)))
-    return Rotation.concatenate(aligned)
-
-
 def minimize_point_strips_pair_distance(strips, mode='crop'):
     """Minimize average pair distance at the same index between any number of point strips.
 
@@ -141,6 +125,20 @@ def minimize_point_strips_pair_distance(strips, mode='crop'):
     return aligned
 
 
-def extend_aligned_strips(strips, z_vectors, separation):
-    for s, z in zip(strips, z_vectors):
-        pass
+def extrapolate_point_strip(strip, directions, separation):
+    """
+    Extrapolate spline samples padded with nans.
+
+    Extrapolates beyond the first and last finite value in strip continuing
+    in the correct direction and spacing by separation.
+    """
+    nans = np.isnan(strip[:, 0])
+    left_pad = np.argmax(~nans)
+    left_dir = -directions[0]
+    left_shift = left_dir / np.linalg.norm(left_dir) * separation
+    right_pad = np.argmax(~nans[::-1])
+    right_dir = directions[-1]
+    right_shift = right_dir / np.linalg.norm(right_dir) * separation
+    left_extension = strip[left_pad] + left_shift * np.arange(left_pad, 0, -1).reshape(-1, 1)
+    right_extension = strip[-right_pad - 1] + right_shift * np.arange(1, right_pad + 1).reshape(-1, 1)
+    return np.concatenate([left_extension, strip[left_pad:-right_pad or None], right_extension])
