@@ -1,20 +1,33 @@
 """Utility functions."""
 
-
-from typing import Optional
+from typing import Tuple, Union
 
 import numpy as np
 from scipy.spatial import KDTree
 
 
 def calculate_y_vectors_from_z_vectors(
-    z: np.ndarray, initial_y_vector: Optional[np.ndarray] = None
+    z: np.ndarray,
+    initial_y_vector: Union[np.ndarray, Tuple[float, float, float]] = (0, 0, 1),
 ) -> np.ndarray:
     """Calculate y vectors starting from z vectors.
 
     This function will return the set of unit vectors perpendicular to the z-vectors
     which are maximally coaxial to their neighbours. It assumes that z vectors (n, 3)
     vary smoothly with increasing n.
+
+    Parameters
+    ----------
+    z : np.ndarray (n, 3)
+        The z vectors used to generate y vectors.
+    initial_y_vector: Union[np.ndarray, Tuple[float, float, float]]
+        The starting y vector projected onto the first z vector to start the projection
+        procedure.
+
+    Returns
+    -------
+    y : np.ndarray (n, 3)
+        The computed y vectors.
     """
     # normalise z vectors and initialise y
     z = z.copy()
