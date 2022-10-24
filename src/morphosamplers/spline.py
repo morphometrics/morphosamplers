@@ -218,11 +218,13 @@ class Spline3D(NDimensionalSpline):
         super()._prepare_splines()
         self._fit_equidistance_orientation_slerp()
 
-    def _fit_equidistance_orientation_slerp(self):
-        """Slerp parametrisation mapping [0, 1] to smoothly varying orientations.
-
-        Yields samples that are smoothly varying in euclidean space for linearly
-        spaced values of u.
+    def _prepare_orientation_sampler(self):
+        """Prepare a sampler yielding smoothly varying orientations along the spline.
+        
+        This method constructs a set of rotation matrices which vary smoothly with
+        the spline coordinate `u`. A sampler is then prepared which can be queried at
+        any point(s) along the spline coordinate `u` and the resulting rotations vary 
+        smoothly along the spline
         """
         u = np.linspace(0, 1, num=self._n_spline_samples)
         z = self._sample_spline_z(u)
