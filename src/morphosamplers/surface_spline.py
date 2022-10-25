@@ -50,7 +50,13 @@ class _SplineSurface(EventedModel):
         self._generate_meta_meta_splines()
         self._generate_meta_meta_meta_splines()
 
+    @property
+    def grid_shape(self):
+        return (len(self._meta_meta_splines_u), len(self._meta_meta_meta_splines_u))
+
     def _generate_splines(self):
+        # TODO: reorder of z slices so an extra one can be added in between any time
+        # TODO: check direction of splines to allow annotating in opposote directions?
         z_change_indices = np.where(np.diff(self.points[:, 2]))[0] + 1
         points_per_spline = np.split(self.points, z_change_indices)
         self._splines = [Spline3D(p, order=self.order) for p in points_per_spline]
@@ -158,7 +164,6 @@ class _SplineSurface(EventedModel):
 #             for spline in splines
 #         ]
 #         return deduplicate_points(np.concatenate(equidistant_points), separation / 2)
-#         # return np.concatenate(equidistant_points)
 #
 #
 # def sample_surface_orientations(self, separation, inside_point):
@@ -227,7 +232,7 @@ class SplineSurfaceGrid(_SplineSurface):
             closest_idx = np.argmin(np.linalg.norm(diffs, axis=1))
             z_closest = z[closest_idx]
             z_inside = diffs[closest_idx]
-            # TODO: why is closest so small? something is off
+            # flip is the point is outside
             if np.dot(z_inside, z_closest) < 0:
                 rots *= Rotation.from_euler("x", np.pi)
 
