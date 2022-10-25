@@ -10,51 +10,66 @@ from scipy.spatial.transform import Rotation
 from .spline import Spline3D
 
 
-def generate_2D_grid(
-    grid_shape: Tuple[int, int] = (10, 10), grid_spacing: Tuple[int, int] = (1, 1)
-) -> np.ndarray:
-    """
-    Generate a 2D sampling grid with specified shape and spacing.
-
-    The grid generated is centered on the origin, lying on the xy plane,
-    has shape (*grid_shape, 3) and spacing grid_spacing between neighboring points.
-
-    Parameters
-    ----------
-    grid_shape : Tuple[int, int]
-        Shape of the 2D grid.
-    grid_spacing : Tuple[int, int]
-        Spacing between points in the sampling grid.
-
-    Returns
-    -------
-    np.ndarray
-        Coordinate of points forming the 2D grid.
-    """
-    # create indices for x and y with correct spacing
-    width = np.linspace(-1, 1, grid_shape[0]) * grid_shape[0] * grid_spacing[0]
-    height = np.linspace(-1, 1, grid_shape[1]) * grid_shape[1] * grid_spacing[1]
-    # convert to coordinate form (x, y, z, 3) (at z = 0)
-    grid = np.stack(np.meshgrid(width, height, 0, indexing="ij"), axis=3)
-    # drop degenerate dim
-    return einops.rearrange(grid, "x y 1 d -> x y d")
-
-
 def generate_3D_grid(
     grid_shape: Tuple[int, int, int] = (10, 10, 10),
-    grid_spacing: Tuple[int, int, int] = (1, 1, 1),
+    grid_spacing: Tuple[float, float, float] = (1, 1, 1),
+    squeeze: bool = True,
 ) -> np.ndarray:
     """
     Generate a 3D sampling grid with specified shape and spacing.
 
-    The grid generated is centered on the origin, has shape (*grid_shape, 3)
-    and spacing grid_spacing between neighboring points.
+    The grid generated is centered on the origin, has shape (m, n, p, 3) for
+    grid_shape (m, n, p), and spacing grid_spacing between neighboring points.
 
     Parameters
     ----------
     grid_shape : Tuple[int, int, int]
-        Shape of the 3D grid.
-    grid_spacing : Tuple[int, int, int]
+        The number of grid points along each axis.
+    grid_spacing : Tuple[float, float, float]
+        Spacing between points in the sampling grid.
+    squeeze: bool
+        Discard degenerate dimensions in the output.
+
+    Returns
+    -------
+    np.ndarray
+        Coordinate of points forming the 3D grid.
+    """
+    # create indices for x and y with correct spacing
+    w, h, d = grid_shape
+    dw, dh, dd = grid_spacing
+    if w != 1:
+        width = np.linspace(-1, 1, w) * w * dw
+    else:
+        width = 0
+    if h != 1:
+        height = np.linspace(-1, 1, h) * h * dh
+    else:
+        height = 0
+    if d != 1:
+        depth = np.linspace(-1, 1, d) * d * dd
+    else:
+        depth = 0
+    # convert to stack form (x, y, z, 3)
+    grid = np.stack(np.meshgrid(width, height, depth, indexing="ij"), axis=3)
+    return grid
+
+
+def generate_2D_grid(
+    grid_shape: Tuple[int, int] = (10, 10), grid_spacing: Tuple[float, float] = (1, 1)
+) -> np.ndarray:
+    """
+    Generate a 2D sampling grid with specified shape and spacing.
+
+    The grid generated is centered on the origin, lying on the plane with normal
+    vector [0, 0, 1], has shape (m, n, 3) for grid_shape (m, n), and spacing
+    grid_spacing between neighboring points.
+
+    Parameters
+    ----------
+    grid_shape : Tuple[int, int]
+        The number of grid points along each axis.
+    grid_spacing : Tuple[float, float]
         Spacing between points in the sampling grid.
 
     Returns
@@ -62,13 +77,7 @@ def generate_3D_grid(
     np.ndarray
         Coordinate of points forming the 2D grid.
     """
-    # create indices for x and y with correct spacing
-    width = np.linspace(-1, 1, grid_shape[0]) * grid_shape[0] * grid_spacing[0]
-    height = np.linspace(-1, 1, grid_shape[1]) * grid_shape[1] * grid_spacing[1]
-    depth = np.linspace(-1, 1, grid_shape[2]) * grid_shape[2] * grid_spacing[2]
-    # convert to stack form (x, y, z, 3)
-    grid = np.stack(np.meshgrid(width, height, depth, indexing="ij"), axis=3)
-    return grid
+    return generate_3D_grid(grid_shape=(*grid_shape, 1), grid_spacing=(*grid_spacing, 1))
 
 
 def generate_sampling_coordinates(
@@ -144,7 +153,7 @@ def sample_volume_along_spline(
     spline: Spline3D,
     batch: int = 100,
     grid_shape: Tuple[int, int] = (10, 10),
-    grid_spacing: Tuple[int, int] = (1, 1),
+    grid_spacing: Tuple[float, float] = (1, 1),
     interpolation_order: int = 3,
 ) -> np.ndarray:
     """
@@ -160,7 +169,7 @@ def sample_volume_along_spline(
         Number of samples to take along the spline.
     grid_shape : Tuple[int, int]
         Shape of the 2D grid.
-    grid_spacing : Tuple[int, int]
+    grid_spacing : Tuple[float, float]
         Spacing between points in the sampling grid.
     interpolation_order : int
         Spline order for image interpolation.
@@ -180,12 +189,12 @@ def sample_volume_along_spline(
     )
 
 
-def sample_volume_subvolumes(
+def sample_subvolumes(
     volume: np.ndarray,
     positions: np.ndarray,
     orientations: Rotation,
     grid_shape: Tuple[int, int, int] = (10, 10, 10),
-    grid_spacing: Tuple[int, int, int] = (1, 1, 1),
+    grid_spacing: Tuple[float, float, float] = (1, 1, 1),
     interpolation_order: int = 3,
 ) -> np.ndarray:
     """
@@ -201,7 +210,7 @@ def sample_volume_subvolumes(
         Orientations of subvolumes.
     grid_shape : Tuple[int, int, int]
         Shape of the 3D grid.
-    grid_spacing : Tuple[int, int, int]
+    grid_spacing : Tuple[float, float, float]
         Spacing between points in the sampling grid.
     interpolation_order : int
         Spline order for image interpolation.

@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from morphosamplers.sampler import generate_2D_grid, generate_3D_grid, generate_sampling_coordinates, sample_volume_at_coordinates, sample_volume_along_spline, sample_volume_subvolumes
+from morphosamplers.sampler import generate_2D_grid, generate_3D_grid, generate_sampling_coordinates, sample_volume_at_coordinates, sample_volume_along_spline, sample_subvolumes
 from morphosamplers.spline import Spline3D
 
 
@@ -68,6 +68,6 @@ def test_sample_volume_subvolumes():
     vol[1, 2, 3] = 1
     pos = np.array([[1, 2, 3]])
     ori = Rotation.identity(1)
-    sampled = sample_volume_subvolumes(vol, pos, ori, grid_shape=(3, 3, 3))
+    sampled = sample_subvolumes(vol, pos, ori, grid_shape=(3, 3, 3))
 
     np.testing.assert_allclose(sampled[0, 1, 1, 1], 1, atol=1e-8)
