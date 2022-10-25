@@ -6,34 +6,27 @@ from morphosamplers.spline import Spline3D
 
 
 def test_generate_2D_grid():
-    shape = (2, 5)
-    spacing = (2, 1)
+    shape = (3, 4)
+    spacing = (2, 3)
     grid = generate_2D_grid(grid_shape=shape, grid_spacing=spacing)
-    assert grid.shape == (2, 5, 3)
-    # x axis
-    assert grid[..., 0].min() == -4
-    assert grid[..., 0].max() == 4
-    # y axis
-    assert grid[..., 1].min() == -5
-    assert grid[..., 1].max() == 5
+    assert grid.shape == (*shape, 3)
+    # x and y
+    for axis in range(2):
+        vals = np.swapaxes(grid[..., axis], axis, 0)
+        np.testing.assert_allclose(vals[1:] - vals[:-1], spacing[axis])
     # z axis
-    assert np.all(grid[:, :, 2] == 0)
+    z = grid[..., 2]
+    assert np.all(z == 0)
 
 
 def test_generate_3D_grid():
     shape = (2, 5, 3)
     spacing = (2, 1, 3)
     grid = generate_3D_grid(grid_shape=shape, grid_spacing=spacing)
-    assert grid.shape == (2, 5, 3, 3)
-    # x axis
-    assert grid[..., 0].min() == -4
-    assert grid[..., 0].max() == 4
-    # y axis
-    assert grid[..., 1].min() == -5
-    assert grid[..., 1].max() == 5
-    # z axis
-    assert grid[..., 2].min() == -9
-    assert grid[..., 2].max() == 9
+    assert grid.shape == (*shape, 3)
+    for axis in range(3):
+        vals = np.swapaxes(grid[..., axis], axis, 0)
+        np.testing.assert_allclose(vals[1:] - vals[:-1], spacing[axis])
 
 
 def test_generate_sampling_coordinates():

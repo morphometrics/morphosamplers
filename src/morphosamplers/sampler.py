@@ -2,7 +2,6 @@
 
 from typing import Tuple
 
-import einops
 import numpy as np
 from scipy.ndimage import map_coordinates
 from scipy.spatial.transform import Rotation
@@ -36,22 +35,19 @@ def generate_3D_grid(
         Coordinate of points forming the 3D grid.
     """
     # create indices for x and y with correct spacing
-    w, h, d = grid_shape
-    dw, dh, dd = grid_spacing
-    if w != 1:
-        width = np.linspace(-1, 1, w) * w * dw
-    else:
-        width = 0
-    if h != 1:
-        height = np.linspace(-1, 1, h) * h * dh
-    else:
-        height = 0
-    if d != 1:
-        depth = np.linspace(-1, 1, d) * d * dd
-    else:
-        depth = 0
+    coords = []
+    for dim in range(3):
+        ln = grid_shape[dim]
+        spacing = grid_spacing[dim]
+        if ln != 1:
+            coord = np.linspace(-0.5, 0.5, ln) * (ln - 1) * spacing
+        else:
+            coord = 0
+        coords.append(coord)
     # convert to stack form (x, y, z, 3)
-    grid = np.stack(np.meshgrid(width, height, depth, indexing="ij"), axis=3)
+    grid = np.stack(np.meshgrid(*coords, indexing="ij"), axis=3)
+    if squeeze:
+        grid = grid.squeeze()
     return grid
 
 
