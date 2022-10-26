@@ -148,36 +148,33 @@ class NDimensionalSpline(EventedModel):
         samples = splev(u, self._raw_spline_tck, der=derivative_order)
         return einops.rearrange(samples, "c 1 1 b -> b c")
 
-    def _get_equidistance_u(self, separation: float) -> np.ndarray:
+    def _get_equidistance_u(self, separation: float, approximate: bool = False) -> np.ndarray:
         """Get equally spaced values of u.
 
         Parameters
         ----------
         separation : float
             The distance between the u values in euclidian distance.
+        approximate : bool
+            Approximate the separation in order to include the points at 0 and 1.
 
         Returns
         -------
         u : np.ndarray
             The array of equally-spaced spline coordinates..
         """
-        n_points = int(self._length // separation)
+        n_points = int(self._length / separation)
         if n_points == 0:
             raise ValueError(f'separation ({separation}) must be less than '
                              f'length ({self._length})')
-        remainder = (self._length % separation) / self._length
+        if not approximate:
+            remainder = (self._length % separation) / self._length
+        else:
+            remainder = 0
         return np.linspace(0, 1 - remainder, n_points)
 
-    def _get_approximate_equidistance_u(self, separation: float) -> np.ndarray:
-        """Equally spaced values of u separated by approximately separation.
-
-        Extrema are maintained.
-        """
-        n_points = int(self._length / separation)
-        return np.linspace(0, 1, n_points)
-
     def _get_equidistance_spline_samples(
-        self, separation: float, derivative_order: int = 0
+        self, separation: float, derivative_order: int = 0, approximate: bool = False
     ) -> np.ndarray:
         """Calculate equidistant spline samples with a defined separation.
 
@@ -191,6 +188,8 @@ class NDimensionalSpline(EventedModel):
             If >0, the derivative of position is returned (e.g., 1 for tangent vector).
             derivative_order must be <= the spline order.
             Default value is 0.
+        approximate : bool
+            Approximate the separation in order to include the points at 0 and 1.
 
         Returns
         -------
@@ -202,16 +201,7 @@ class NDimensionalSpline(EventedModel):
         if (derivative_order < 0) or (derivative_order > self.order):
             # derivative order must be 0 < derivative_order < spline_order
             raise ValueError("derivative order must be [0, spline_order]")
-        u = self._get_equidistance_u(separation)
-        return self.sample_spline(u, derivative_order=derivative_order)
-
-    def _get_approximate_equidistance_spline_samples(
-        self, separation: float, derivative_order: int = 0
-    ) -> np.ndarray:
-        if (derivative_order < 0) or (derivative_order > self.order):
-            # derivative order must be 0 < derivative_order < spline_order
-            raise ValueError("derivative order must be [0, spline_order]")
-        u = self._get_approximate_equidistance_u(separation)
+        u = self._get_equidistance_u(separation, approximate=approximate)
         return self.sample_spline(u, derivative_order=derivative_order)
 
 
@@ -268,11 +258,7 @@ class Spline3D(NDimensionalSpline):
         rotations = self.sample_spline_orientations(u)
         return rotations.as_matrix()[..., 1]
 
-    def _get_equidistance_orientations(self, separation: float) -> Rotation:
+    def _get_equidistance_orientations(self, separation: float, approximate: bool = False) -> Rotation:
         """Calculate orientations for equidistant samples with a defined separation."""
-        u = self._get_equidistance_u(separation)
+        u = self._get_equidistance_u(separation, approximate=approximate)
         return self.sample_spline_orientations(u)
-
-    def _get_approximate_equidistance_orientations(self, separation: float) -> Rotation:
-        u = self._get_approximate_equidistance_u(separation)
-        return self._sample_spline_orientations(u)

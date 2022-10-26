@@ -1,6 +1,6 @@
 """Tooling to fit and sample surfaces."""
 
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 from psygnal import EventedModel
@@ -11,7 +11,7 @@ from scipy.spatial.transform import Rotation
 from .spline import Spline3D
 from .utils import (
     extrapolate_point_strips_with_direction,
-    interpolate_and_extrapolate_point_strips,
+    # interpolate_and_extrapolate_point_strips,
     minimize_point_strips_pair_distance,
 )
 
@@ -22,12 +22,11 @@ class _SplineSurface(EventedModel):
     points: np.ndarray
     separation: float
     order: conint(ge=1, le=5) = 3
+    closed: bool = False
     _splines = PrivateAttr(List[Spline3D])
-    _meta_splines = PrivateAttr(List[Spline3D])
-    _meta_meta_splines_tck = PrivateAttr(List[Spline3D])
-    _meta_meta_splines_u = PrivateAttr(List[Spline3D])
-    _meta_meta_meta_splines_tck = PrivateAttr(List[Spline3D])
-    _meta_meta_meta_splines_u = PrivateAttr(List[Spline3D])
+    _cross_splines = PrivateAttr(List[Spline3D])
+    _grid_splines = PrivateAttr(List[Tuple])
+    _grid_meta_splines = PrivateAttr(List[Tuple])
 
     class Config:
         """Pydantic BaseModel configuration."""
@@ -46,96 +45,103 @@ class _SplineSurface(EventedModel):
 
     def _prepare_splines(self):
         self._generate_splines()
-        self._generate_meta_splines()
-        self._generate_meta_meta_splines()
-        self._generate_meta_meta_meta_splines()
+        self._generate_cross_splines()
+        self._generate_grid_splines()
 
     @property
     def grid_shape(self):
-        return (len(self._meta_meta_splines_u), len(self._meta_meta_meta_splines_u))
+        return (len(self._grid_splines), len(self._grid_meta_splines))
 
     def _generate_splines(self):
         # TODO: reorder of z slices so an extra one can be added in between any time
-        # TODO: check direction of splines to allow annotating in opposote directions?
+        # TODO: check direction of splines to allow annotating in opposite directions?
         z_change_indices = np.where(np.diff(self.points[:, 2]))[0] + 1
         points_per_spline = np.split(self.points, z_change_indices)
-        self._splines = [Spline3D(p, order=self.order) for p in points_per_spline]
+        raw_splines = [Spline3D(p, order=self.order) for p in points_per_spline]
 
-    def _generate_meta_splines(self):
+        # fix edge artifacts by extending splines until we have a grid
+        new_control_points = self._fix_spline_edges(raw_splines, self.separation, self.order)
+        self._splines = [Spline3D(p, order=self.order) for p in new_control_points]
+
+    @staticmethod
+    def _fix_spline_edges(splines, separation, order):
+        """Generate new control points for the given splines to fix edge artifacts"""
         # sample splines to get equidistant points on z slices
         us = [
-            spline._get_approximate_equidistance_u(self.separation)
-            for spline in self._splines
+            spline._get_equidistance_u(separation, approximate=True)
+            for spline in splines
         ]
-        equidistant_points = [
-            spline.sample_spline(u) for spline, u in zip(self._splines, us)
+        points = [
+            spline.sample_spline(u) for spline, u in zip(splines, us)
         ]
         # align and pad with nans
-        aligned = minimize_point_strips_pair_distance(equidistant_points, mode="nan")
+        aligned = minimize_point_strips_pair_distance(points, mode="nan")
         # TODO: keep track of where we are "outside" of the raw data so we can
         # drop it later
 
-        equidistant_directions = [
+        directions = [
             spline.sample_spline(u, derivative_order=1)
-            for spline, u in zip(self._splines, us)
+            for spline, u in zip(splines, us)
         ]
+
         # extrapolate where nans are present by extending along the spline direction
         extended = extrapolate_point_strips_with_direction(
-            aligned, equidistant_directions, self.separation
-        )
-        # extrapolate and interpolate in the other direction using linear interpolation
-        extended_across = interpolate_and_extrapolate_point_strips(aligned)
-
-        meta_spline_control_points = np.nanmean(
-            [np.stack(extended, axis=1), extended_across], axis=0
+            aligned, directions, separation
         )
 
-        self._meta_splines = [
-            Spline3D(p, order=self.order) for p in meta_spline_control_points
-        ]
+        # TODO: this seems to cause more problem than it solves. I might be useful in case of
+        #       *really* bad annotation, but even then it's probably better to just suggest
+        #       better annotation in the first place
+        # # extrapolate and interpolate in the other direction using linear interpolation
+        # extended_across = interpolate_and_extrapolate_point_strips(aligned)
+        #
+        # spline_control_points = np.nanmean(
+        #     [extended, np.stack(extended_across, axis=1)], axis=0
+        # )
 
-    def _generate_meta_meta_splines(self):
+        return extended
+
+    def _generate_cross_splines(self):
+        # do one more round of fixing edges to avoid "cuts" in the grid towards the edges
+        # (which are caused by solitary points "pulling" the other z_slices towards them)
+        # This way we can base the second round on already mostly aligned splines
+        control_points = self._fix_spline_edges(self._splines, self.separation, self.order)
+        # stack points in the other direction, so we get the cross-splines
+        stacked = np.stack(control_points, axis=1)
+
+        self._cross_splines = [Spline3D(p, order=self.order) for p in stacked]
+
+    def _generate_grid_splines(self):
+        # we finally create grid-like splines with optimized spacing
+        # though not optimal for consistent spacing, we have to use the same n
+        # for each spline, otherwise we end up with offset points in each lines
         us = [
-            spline._get_approximate_equidistance_u(self.separation)
-            for spline in self._meta_splines
+            spline._get_equidistance_u(self.separation, approximate=True)
+            for spline in self._cross_splines
         ]
         best_n = int(np.mean([len(u) for u in us]))
         u = np.linspace(0, 1, best_n)
-        equidistant_points = [spline.sample_spline(u) for spline in self._meta_splines]
+        equidistant_points = [spline.sample_spline(u) for spline in self._cross_splines]
 
         # these last splines should not be oversampled, because we want exact
         # positions for our knots, which we save in self._meta_meta_splines_u
-        tcks = []
-        us = []
+        splines = []
         for p in np.stack(equidistant_points, axis=1):
-            (
-                tck,
-                u,
-            ) = splprep(p.T, s=0, k=self.order)
-            tcks.append(tck)
-            us.append(u)
-        self._meta_meta_splines_tck = tcks
-        self._meta_meta_splines_u = us
+            splines.append(splprep(p.T, s=0, k=self.order))
+        self._grid_splines = splines
 
-    def _generate_meta_meta_meta_splines(self):
+        # then generate new splines from the cross grid-splines to ensure they point
+        # exactly to the same coordinates (the knots are shared), so we can get perfect
+        # orientations
         equidistant_points = [
             np.stack(splev(u, tck), axis=1)
-            for u, tck in zip(self._meta_meta_splines_u, self._meta_meta_splines_tck)
+            for tck, u in self._grid_splines
         ]
 
-        # these last splines should not be oversampled, because we want exact
-        # positions for our knots, which we save in self._meta_meta_splines_u
-        tcks = []
-        us = []
+        splines = []
         for p in np.stack(equidistant_points, axis=1):
-            (
-                tck,
-                u,
-            ) = splprep(p.T, s=0, k=self.order)
-            tcks.append(tck)
-            us.append(u)
-        self._meta_meta_meta_splines_tck = tcks
-        self._meta_meta_meta_splines_u = us
+            splines.append(splprep(p.T, s=0, k=self.order))
+        self._grid_meta_splines = splines
 
 
 # class SplineSurface(_SplineSurface):
@@ -182,7 +188,7 @@ class _SplineSurface(EventedModel):
 
 
 class SplineSurfaceGrid(_SplineSurface):
-    """Surface model defined by a grid of splines."""
+    """Surface model defined by a regular grid of splines."""
 
     def sample_surface(self):
         """Sample an approximately equidistant grid of points on the surface.
@@ -192,7 +198,7 @@ class SplineSurfaceGrid(_SplineSurface):
         """
         equidistant_points = [
             np.stack(splev(u, tck), axis=1)
-            for u, tck in zip(self._meta_meta_splines_u, self._meta_meta_splines_tck)
+            for tck, u in self._grid_splines
         ]
         return np.concatenate(equidistant_points)
 
@@ -200,14 +206,13 @@ class SplineSurfaceGrid(_SplineSurface):
         """Sample an approximately equidistant grid of orientations on the surface."""
         equidistant_x_vecs = [
             np.stack(splev(u, tck, der=1), axis=1)
-            for u, tck in zip(self._meta_meta_splines_u, self._meta_meta_splines_tck)
+            for tck, u in self._grid_splines
         ]
         equidistant_y_vecs = [
             np.stack(splev(u, tck, der=1), axis=1)
-            for u, tck in zip(
-                self._meta_meta_meta_splines_u, self._meta_meta_meta_splines_tck
-            )
+            for tck, u in self._grid_meta_splines
         ]
+
         x = np.concatenate(equidistant_x_vecs)
         x /= np.linalg.norm(x, axis=1, keepdims=True)
         # y vectors are going across, so we need to swap axes
@@ -222,9 +227,7 @@ class SplineSurfaceGrid(_SplineSurface):
             # use the inside point to put normal in correct direction
             equidistant_points = [
                 np.stack(splev(u, tck), axis=1)
-                for u, tck in zip(
-                    self._meta_meta_splines_u, self._meta_meta_splines_tck
-                )
+                for tck, u in self._grid_splines
             ]
             pts = np.concatenate(equidistant_points)
             # get closest neighbour
