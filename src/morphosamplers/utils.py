@@ -185,10 +185,10 @@ def extrapolate_point_strips_with_direction(strips, directions, separation):
 
 def interpolate_and_extrapolate_point_strips(strips):
     """
-    Extrapolate and interpolate a point strip containing nan values.
+    Extrapolate and interpolate point strips containing nan values.
 
-    Perform simple linear interpolation when possible, or if only one value
-    is available, duplicates it.
+    Replace NaN values in each strip by interpolating or extrapolating linearly from the
+    surrounding data. Ff only one value is present, repeat it.
     """
     extended_with_cross_mean = []
     all_z_values = np.stack(strips, axis=1)[:, :, 2]
