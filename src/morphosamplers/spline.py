@@ -173,7 +173,7 @@ class NDimensionalSpline(EventedModel):
             remainder = 0
         return np.linspace(0, 1 - remainder, n_points)
 
-    def _get_equidistance_spline_samples(
+    def sample_spline_equidistant(
         self, separation: float, derivative_order: int = 0, approximate: bool = False
     ) -> np.ndarray:
         """Calculate equidistant spline samples with a defined separation.
@@ -258,7 +258,7 @@ class Spline3D(NDimensionalSpline):
         rotations = self.sample_spline_orientations(u)
         return rotations.as_matrix()[..., 1]
 
-    def _get_equidistance_orientations(self, separation: float, approximate: bool = False) -> Rotation:
+    def sample_spline_orientations_equidistant(self, separation: float, approximate: bool = False) -> Rotation:
         """Calculate orientations for equidistant samples with a defined separation."""
         u = self._get_equidistance_u(separation, approximate=approximate)
         return self.sample_spline_orientations(u)

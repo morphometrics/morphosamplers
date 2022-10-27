@@ -202,7 +202,7 @@ def sample_volume_along_spline(
     if not isinstance(spline, Spline3D):
         spline = Spline3D(points=spline)
     positions = spline._get_equidistance_spline_samples(sampling_spacing)
-    orientations = spline._get_equidistance_orientations(sampling_spacing)
+    orientations = spline.sample_spline_orientations_equidistant(sampling_spacing)
     grid = generate_2D_grid(grid_shape=sampling_shape, grid_spacing=sampling_spacing)
     sampling_coords = generate_sampling_coordinates(grid, positions, orientations)
     return sample_volume_at_coordinates(
