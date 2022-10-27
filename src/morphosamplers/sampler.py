@@ -3,22 +3,22 @@
 from typing import Tuple
 
 import numpy as np
+import einops
 from scipy.ndimage import map_coordinates
 from scipy.spatial.transform import Rotation
 
 from .spline import Spline3D
 
 
-def generate_3D_grid(
+def generate_3d_grid(
     grid_shape: Tuple[int, int, int] = (10, 10, 10),
     grid_spacing: Tuple[float, float, float] = (1, 1, 1),
-    squeeze: bool = True,
 ) -> np.ndarray:
     """
     Generate a 3D sampling grid with specified shape and spacing.
 
-    The grid generated is centered on the origin, has shape (m, n, p, 3) for
-    grid_shape (m, n, p), and spacing grid_spacing between neighboring points.
+    The grid generated is centered on the origin, has shape (w, h, d, 3) for
+    grid_shape (w, h, d), and spacing grid_spacing between neighboring points.
 
     Parameters
     ----------
@@ -26,39 +26,30 @@ def generate_3D_grid(
         The number of grid points along each axis.
     grid_spacing : Tuple[float, float, float]
         Spacing between points in the sampling grid.
-    squeeze: bool
-        Discard degenerate dimensions in the output.
 
     Returns
     -------
     np.ndarray
         Coordinate of points forming the 3D grid.
     """
-    # create indices for x and y with correct spacing
-    coords = []
-    for dim in range(3):
-        ln = grid_shape[dim]
-        spacing = grid_spacing[dim]
-        if ln != 1:
-            coord = np.linspace(-0.5, 0.5, ln) * (ln - 1) * spacing
-        else:
-            coord = 0
-        coords.append(coord)
-    # convert to stack form (x, y, z, 3)
-    grid = np.stack(np.meshgrid(*coords, indexing="ij"), axis=3)
-    if squeeze:
-        grid = grid.squeeze()
+    # generate a grid of points at each integer from 0 to grid_shape for each dimension
+    grid = np.indices(grid_shape).astype(float)
+    grid = einops.rearrange(grid, 'xyz w h d -> w h d xyz')
+    # shift the grid to be centered on the origin
+    grid -= (np.array(grid_shape)) // 2
+    # scale the grid to get correct spacing
+    grid *= grid_spacing
     return grid
 
 
-def generate_2D_grid(
+def generate_2d_grid(
     grid_shape: Tuple[int, int] = (10, 10), grid_spacing: Tuple[float, float] = (1, 1)
 ) -> np.ndarray:
     """
     Generate a 2D sampling grid with specified shape and spacing.
 
     The grid generated is centered on the origin, lying on the plane with normal
-    vector [0, 0, 1], has shape (m, n, 3) for grid_shape (m, n), and spacing
+    vector [0, 0, 1], has shape (w, h, 3) for grid_shape (w, h), and spacing
     grid_spacing between neighboring points.
 
     Parameters
@@ -73,10 +64,11 @@ def generate_2D_grid(
     np.ndarray
         Coordinate of points forming the 2D grid.
     """
-    return generate_3D_grid(grid_shape=(*grid_shape, 1), grid_spacing=(*grid_spacing, 1))
+    grid = generate_3d_grid(grid_shape=(*grid_shape, 1), grid_spacing=(*grid_spacing, 1))
+    return einops.rearrange(grid, 'w h 1 xyz -> w h xyz')
 
 
-def generate_sampling_coordinates(
+def place_sampling_grids(
     sampling_grid: np.ndarray, positions: np.ndarray, orientations: Rotation
 ) -> np.ndarray:
     """
@@ -140,8 +132,9 @@ def sample_volume_at_coordinates(
         volume, coordinates.reshape(-1, 3).T, order=interpolation_order
     )
     # reshape back (need to invert due to previous transposition)
+    sampled_volume = sampled_volume.reshape(*grid_shape, batch)
     # and retranspose to get batch back to the 0th dimension
-    return np.swapaxes(sampled_volume.reshape(*grid_shape, batch), -1, 0)
+    return np.swapaxes(sampled_volume, -1, 0)
 
 
 def sample_volume_along_spline(
@@ -178,8 +171,8 @@ def sample_volume_along_spline(
     u = np.linspace(0, 1, batch)
     positions = spline.sample_spline(u)
     orientations = spline.sample_spline_orientations(u)
-    grid = generate_2D_grid(grid_shape=grid_shape, grid_spacing=grid_spacing)
-    sampling_coords = generate_sampling_coordinates(grid, positions, orientations)
+    grid = generate_2d_grid(grid_shape=grid_shape, grid_spacing=grid_spacing)
+    sampling_coords = place_sampling_grids(grid, positions, orientations)
     return sample_volume_at_coordinates(
         volume, sampling_coords, interpolation_order=interpolation_order
     )
@@ -216,8 +209,8 @@ def sample_subvolumes(
     np.ndarray
         Sampled volume.
     """
-    grid = generate_3D_grid(grid_shape=grid_shape, grid_spacing=grid_spacing)
-    sampling_coords = generate_sampling_coordinates(grid, positions, orientations)
+    grid = generate_3d_grid(grid_shape=grid_shape, grid_spacing=grid_spacing)
+    sampling_coords = place_sampling_grids(grid, positions, orientations)
     return sample_volume_at_coordinates(
         volume, sampling_coords, interpolation_order=interpolation_order
     )

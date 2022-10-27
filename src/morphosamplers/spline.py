@@ -199,7 +199,7 @@ class NDimensionalSpline(EventedModel):
 
 
 class Spline3D(NDimensionalSpline):
-    """3D spline model with interpolation of orientations along the spline.
+    """3D spline model with a consistent local coordinate system.
 
     Basis vectors for a local coordinate system along the spline can be calculated.
     In this coordinate system, z vectors are tangent to the spline and the xy-plane
