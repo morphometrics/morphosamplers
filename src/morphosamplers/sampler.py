@@ -134,7 +134,7 @@ def sample_volume_at_coordinates(
     # reshape back (need to invert due to previous transposition)
     sampled_volume = sampled_volume.reshape(*grid_shape, batch)
     # and retranspose to get batch back to the 0th dimension
-    return einops(sampled_volume, '... batch -> batch ...')
+    return einops.rearrange(sampled_volume, '... batch -> batch ...')
 
 
 def sample_volume_along_spline(
