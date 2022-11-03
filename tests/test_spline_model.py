@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from morphosamplers.spline import NDimensionalSpline
+from morphosamplers.spline import NDimensionalSpline, Spline3D
 
 n_points = 10
 zeros_column = np.zeros((n_points,))
@@ -124,3 +124,13 @@ def test_invalid_spline_derivatives(derivative_order):
         _ = spline_model._get_equidistance_spline_samples(
             separation=1, derivative_order=derivative_order
         )
+
+
+def test_spline_orientations():
+    points = np.array([[0, 0, 0], [0, 0, 1], [0, 0, 2], [0, 0, 3]])
+    spline = Spline3D(points=points, order=3)
+    pt = spline.sample_spline(u=0)
+    # lower atol, as it's very strict by default, much more than np.allclose
+    np.testing.assert_allclose(pt, 0, atol=1e-20)
+    ori = spline.sample_spline_orientations(u=0)
+    np.testing.assert_allclose(ori.apply([0, 0, 1]), [[0, 0, 1]])

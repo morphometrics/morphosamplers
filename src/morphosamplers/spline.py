@@ -7,6 +7,9 @@ import numpy as np
 from psygnal import EventedModel
 from pydantic import PrivateAttr, conint, root_validator, validator
 from scipy.interpolate import splev, splprep
+from scipy.spatial.transform import Rotation, Slerp
+
+from .utils import calculate_y_vectors_from_z_vectors
 
 
 class NDimensionalSpline(EventedModel):
@@ -14,7 +17,7 @@ class NDimensionalSpline(EventedModel):
 
     points: np.ndarray
     order: conint(ge=1, le=5) = 3
-    _n_spline_samples: int = 10000
+    _n_spline_samples: int = PrivateAttr(10000)
     _raw_spline_tck = PrivateAttr(Tuple)
     _equidistance_spline_tck = PrivateAttr(Tuple)
     _length = PrivateAttr(float)
@@ -159,11 +162,14 @@ class NDimensionalSpline(EventedModel):
             The array of equally-spaced spline coordinates..
         """
         n_points = int(self._length // separation)
+        if n_points == 0:
+            raise ValueError(f'separation ({separation}) must be less than '
+                             f'length ({self._length})')
         remainder = (self._length % separation) / self._length
         return np.linspace(0, 1 - remainder, n_points)
 
     def _get_equidistance_spline_samples(
-        self, separation: float, derivative_order: bool = 0
+        self, separation: float, derivative_order: int = 0
     ) -> np.ndarray:
         """Calculate equidistant spline samples with a defined separation.
 
@@ -190,3 +196,62 @@ class NDimensionalSpline(EventedModel):
             raise ValueError("derivative order must be [0, spline_order]")
         u = self._get_equidistance_u(separation)
         return self.sample_spline(u, derivative_order=derivative_order)
+
+
+class Spline3D(NDimensionalSpline):
+    """3D spline model with a consistent local coordinate system.
+
+    Basis vectors for a local coordinate system along the spline can be calculated.
+    In this coordinate system, z vectors are tangent to the spline and the xy-plane
+    changes minimally and smoothly.
+    """
+
+    _rotation_sampler = PrivateAttr(Slerp)
+
+    @validator("points")
+    def _is_3d_coordinate_array(cls, v):
+        if v.ndim != 2 or v.shape[-1] != 3:
+            raise ValueError("must be an (n, 3) array")
+        return v
+
+    def _prepare_splines(self):
+        super()._prepare_splines()
+        self._prepare_orientation_sampler()
+
+    def _prepare_orientation_sampler(self):
+        """Prepare a sampler yielding smoothly varying orientations along the spline.
+
+        This method constructs a set of rotation matrices which vary smoothly with
+        the spline coordinate `u`. A sampler is then prepared which can be queried at
+        any point(s) along the spline coordinate `u` and the resulting rotations vary 
+        smoothly along the spline
+        """
+        u = np.linspace(0, 1, num=self._n_spline_samples)
+        z = self._sample_spline_z(u)
+        y = calculate_y_vectors_from_z_vectors(z)
+        x = np.cross(y, z)
+        r = Rotation.from_matrix(np.stack([x, y, z], axis=-1))
+        self._rotation_sampler = Slerp(u, r)
+
+    def sample_spline_orientations(self, u: Union[float, np.ndarray]):
+        """Local coordinate system at any point along the spline."""
+        rot = self._rotation_sampler(u)
+        if rot.single:
+            rot = Rotation.concatenate([rot])
+        return rot
+
+    def _sample_spline_z(self, u: Union[float, np.ndarray]) -> np.ndarray:
+        """Sample vectors tangent to the spline."""
+        z = self.sample_spline(u, derivative_order=1)
+        z /= np.linalg.norm(z, axis=1, keepdims=True)
+        return z
+
+    def _sample_spline_y(self, u: Union[float, np.ndarray]) -> np.ndarray:
+        """Sample vectors perpendicular to the spline."""
+        rotations = self.sample_spline_orientations(u)
+        return rotations.as_matrix()[..., 1]
+
+    def _get_equidistance_orientations(self, separation: float) -> Rotation:
+        """Calculate orientations for equidistant samples with a defined separation."""
+        u = self._get_equidistance_u(separation)
+        return self.sample_spline_orientations(u)
