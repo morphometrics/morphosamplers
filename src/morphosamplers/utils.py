@@ -1,6 +1,7 @@
 """Utility functions."""
 
 from typing import Tuple, Union
+import warnings
 
 import numpy as np
 from scipy.spatial import KDTree
@@ -90,7 +91,26 @@ def deduplicate_points(coords: np.ndarray, exclusion_radius: float) -> np.ndarra
     return coords
 
 
-def minimize_point_strips_pair_distance(strips, mode="crop"):
+def minimize_closed_point_strips_pair_distance(strips, expected_dist=None):
+    # assume closed, circular strips with equal length
+    result = [strips[0]]
+    ln = len(strips[0])
+    for arr, next in zip(strips, strips[1:]):
+        best_dist = None
+        for i in range(ln):
+            next_rolled = np.roll(next, i, axis=0)
+            roll_dist = np.linalg.norm(arr - next, axis=1)
+            avg_dist = np.mean(roll_dist)
+            if best_dist is None or avg_dist < best_dist:
+                best_dist = avg_dist
+                best_arr = next_rolled
+        if expected_dist is not None and best_dist >= expected_dist * np.sqrt(2):
+            warnings.warn('The grid is sheared by more than 1 separation in some places', stacklevel=2)
+        result.append(best_arr)
+    return result
+
+
+def minimize_point_strips_pair_distance(strips, mode="crop", expected_dist=None):
     """Minimize average pair distance at the same index between any number of point strips.
 
     Rolls each strip in order to minimize the euclidean distance
@@ -126,6 +146,8 @@ def minimize_point_strips_pair_distance(strips, mode="crop"):
             if best_dist is None or avg_dist < best_dist:
                 best_dist = avg_dist
                 best_roll_idx = i
+        if expected_dist is not None and best_dist >= expected_dist * np.sqrt(2):
+            warnings.warn('The grid is sheared by more than 1 separation in some places', stacklevel=2)
         offset = best_roll_idx - len(next)
         total_offset = offset + offsets[-1]
         offsets.append(total_offset)
@@ -181,3 +203,11 @@ def extrapolate_point_strips_with_direction(strips, directions, separation):
         )
         extrapolated.append(padded)
     return extrapolated
+
+
+def within_range(arr, low, high, atol=1e-15):
+    diff_from_min = arr - low
+    diff_from_max = arr - high
+    above_min = (diff_from_min >= 0) | np.isclose(diff_from_min, 0, atol=atol)
+    below_max = (diff_from_max <= 0) | np.isclose(diff_from_max, 0, atol=atol)
+    return above_min & below_max

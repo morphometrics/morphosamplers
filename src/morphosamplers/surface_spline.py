@@ -12,8 +12,8 @@ from scipy.spatial.transform import Rotation
 from .spline import Spline3D
 from .utils import (
     extrapolate_point_strips_with_direction,
-    # interpolate_and_extrapolate_point_strips,
     minimize_point_strips_pair_distance,
+    minimize_closed_point_strips_pair_distance,
 )
 
 
@@ -47,51 +47,70 @@ class _SplineSurface(EventedModel):
         self._generate_splines()
         self._generate_cross_splines()
 
-    @staticmethod
-    def _fix_spline_edges(splines, separation, order):
+    def _fix_spline_edges(self, splines, separation, order):
         """Generate new control points for the given splines to fix edge artifacts"""
         # sample splines to get equidistant points on z slices
         us = [
             spline._get_equidistance_u(separation, approximate=True)
             for spline in splines
         ]
-        points = [
-            spline.sample_spline(u) for spline, u in zip(splines, us)
-        ]
-        # align and pad with nans
-        aligned = minimize_point_strips_pair_distance(points, mode="nan")
-        # TODO: keep track of where we are "outside" of the raw data so we can
-        # drop it later
 
-        directions = [
-            spline.sample_spline(u, derivative_order=1)
-            for spline, u in zip(splines, us)
-        ]
+        if self.closed:
+            # we need the same amount of points on each spline to make a grid, and we can't just extend
+            n_points = [len(u) for u in us]
+            diff = np.max(n_points) - np.min(n_points)
+            if diff > 1:
+                warnings.warn('The grid is deformed by more than 1 separation in some places. '
+                              'This is inevitable with closed, non-cylindrical grids.')
+            best_n = round(np.mean(n_points))
+            us = [spline._get_equidistance_u_by_n_points(best_n, masked=True) for spline in splines]
 
-        # extrapolate where nans are present by extending along the spline direction
-        extended = extrapolate_point_strips_with_direction(
-            aligned, directions, separation
-        )
+            # we already have the masked values, we shouldn't do it again
+            points = [spline.sample_spline(u) for spline, u in zip(splines, us)]
 
-        return extended
+            points = minimize_closed_point_strips_pair_distance(points, expected_dist=separation)
+        else:
+
+            points = [spline.sample_spline(u) for spline, u in zip(splines, us)]
+
+            points = minimize_point_strips_pair_distance(points, expected_dist=separation, mode="nan")
+
+            # extrapolate where nans are present by extending along the spline direction
+            directions = [
+                spline.sample_spline(u, derivative_order=1)
+                for spline, u in zip(splines, us)
+            ]
+
+            points = extrapolate_point_strips_with_direction(
+                points, directions, separation
+            )
+
+        return points
 
     def _generate_splines(self):
         if self.closed:
-            # repeat the first element at the end
-            points = [np.concatenate([p, p[:1]]) for p in self.points]
+            # repeat the first element, then add self.order elements at the end so the derivatives
+            # are correct otherwise there are kinks in the final closed surface
+            added = self.order + 1
+            points = [np.concatenate([p, p[:added]]) for p in self.points]
+            mask_limits = (0, -(added))
         else:
             points = self.points
+            mask_limits = (0, -1)
 
-        self._splines = [Spline3D(points=p, order=self.order, smoothing=self.smoothing) for p in points]
+        self._splines = [
+            Spline3D(points=p, order=self.order, smoothing=self.smoothing, mask_limits=mask_limits)
+            for p in points
+        ]
 
     def _generate_cross_splines(self):
         # fix edge artifacts by extending splines until we have a grid
         control_points = self._fix_spline_edges(self._splines, self.separation, self.order)
 
-        if self.closed:
-            # _fix_spline_edges returns strips including the extrema, so we need to remove
-            # one of them if the surface is closed to avoid duplication
-            control_points = [p[:-1] for p in control_points]
+        # if self.closed:
+        #     # _fix_spline_edges returns strips including the extrema, so we need to remove
+        #     # one of them if the surface is closed to avoid duplication
+        #     control_points = [p[:-1] for p in control_points]
 
         # stack points in the other direction, so we get the cross-splines
         stacked = np.stack(control_points, axis=1)
