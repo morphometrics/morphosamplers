@@ -2,7 +2,6 @@
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import einops
 import numpy as np
 from psygnal import EventedModel
 from pydantic import PrivateAttr, conint, root_validator, validator
@@ -18,8 +17,7 @@ class NDimensionalSpline(EventedModel):
     points: np.ndarray
     order: conint(ge=1, le=5) = 3
     _n_spline_samples: int = PrivateAttr(10000)
-    _raw_spline_tck = PrivateAttr(Tuple)
-    _equidistance_spline_tck = PrivateAttr(Tuple)
+    _tck = PrivateAttr(Tuple)
     _length = PrivateAttr(float)
 
     class Config:
@@ -30,7 +28,7 @@ class NDimensionalSpline(EventedModel):
     def __init__(self, points: np.ndarray, order: int = 3):
         """Calculate the splines after validating the paramters."""
         super().__init__(points=points, order=order)
-        self._prepare_splines()
+        self._prepare_spline()
 
     @property
     def _ndim(self) -> int:
@@ -63,51 +61,34 @@ class NDimensionalSpline(EventedModel):
         """Overwritten so that splines are recalculated when points are updated."""
         super().__setattr__(name, value)
         if name in ("points", "order"):  # ensure splines stay in sync
-            self._prepare_splines()
+            self._prepare_spline()
 
-    def _prepare_splines(self) -> None:
-        self._fit_raw_spline_parameters()
-        self._fit_equidistance_spline_parameters()
-
-    def _fit_raw_spline_parameters(self) -> None:
+    def _prepare_spline(self) -> None:
         """Spline parametrisation mapping [0, 1] to a smooth curve through spline points.
 
-        Note: equidistant sampling of this spline parametrisation will not yield
-        equidistant samples in Euclidean space.
+        Equidistant samples between 0 and 1 will yield points equidistant along
+        the spline in euclidean space.
         """
-        self._raw_spline_tck, _ = splprep(self.points.T, s=0, k=self.order)
-
-    def _fit_equidistance_spline_parameters(self) -> None:
-        """Calculate a mapping of normalised cumulative distance to linear range [0, 1].
-
-        * Normalised cumulative distance is the cumulative euclidean distance along
-          the spline rescaled to a range of [0, 1].
-        * The spline parametrisation calculated here can be used to
-        map linearly spaced valueswhich when used in the spline spline parametrisation,
-        yield equidistant points in Euclidean space.
-        """
-        # sample the current raw spline parametrisation
-        # yielding non-equidistant samples
+        # oversample an initial spline to ensure better distance parametrisation
         u = np.linspace(0, 1, self._n_spline_samples)
-        filament_samples = splev(u, self._raw_spline_tck)
-        filament_samples = np.stack(filament_samples, axis=1)
+        tck, _ = splprep(self.points.T, s=0, k=self.order)
+        samples = np.stack(splev(u, tck), axis=1)
 
         # calculate the cumulative length of line segments
         # as we move along the filament.
-        inter_point_differences = np.diff(filament_samples, axis=0)
+        inter_point_differences = np.diff(samples, axis=0)
         inter_point_distances = np.linalg.norm(inter_point_differences, axis=1)
         cumulative_distance = np.cumsum(inter_point_distances)
-
-        # calculate spline mapping normalised cumulative distanceto
-        # linear samples in [0, 1]
+        # prepend a zero, no distance has been covered
+        # at start of spline parametrisation
+        cumulative_distance = np.insert(cumulative_distance, 0, 0)
+        # save lenght for later and normalize
         self._length = cumulative_distance[-1]
         cumulative_distance /= self._length
 
-        # prepend a zero, no distance has been covered
-        # at start of spline parametrisation
-        cumulative_distance = np.r_[[0], cumulative_distance]
-        self._equidistance_spline_tck, _ = splprep(
-            [u], u=cumulative_distance, s=0, k=self.order
+        # finally create a spline parametrized by the normalised cumulative distance
+        self._tck, _ = splprep(
+            samples.T, u=cumulative_distance, s=0, k=self.order
         )
 
     def sample_spline(
@@ -144,9 +125,8 @@ class NDimensionalSpline(EventedModel):
             # derivative order must be 0 < derivative_order < spline_order
             raise ValueError("derivative order must be [0, spline_order]")
         u = np.atleast_1d(u)
-        u = splev([np.asarray(u)], self._equidistance_spline_tck)
-        samples = splev(u, self._raw_spline_tck, der=derivative_order)
-        return einops.rearrange(samples, "c 1 1 b -> b c")
+        samples = splev(np.atleast_1d(u), self._tck)
+        return np.stack(samples, axis=1)
 
     def _get_equidistance_u(self, separation: float) -> np.ndarray:
         """Get equally spaced values of u.
@@ -214,8 +194,8 @@ class Spline3D(NDimensionalSpline):
             raise ValueError("must be an (n, 3) array")
         return v
 
-    def _prepare_splines(self):
-        super()._prepare_splines()
+    def _prepare_spline(self):
+        super()._prepare_spline()
         self._prepare_orientation_sampler()
 
     def _prepare_orientation_sampler(self):
