@@ -126,7 +126,7 @@ class NDimensionalSpline(EventedModel):
             raise ValueError("derivative order must be [0, spline_order]")
         u = np.atleast_1d(u)
         samples = splev(np.atleast_1d(u), self._tck)
-        return np.stack(samples, axis=1)
+        return np.stack(samples, axis=1) # (n, d)
 
     def _get_equidistance_u(self, separation: float) -> np.ndarray:
         """Get equally spaced values of u.
