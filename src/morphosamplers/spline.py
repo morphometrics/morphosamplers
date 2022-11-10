@@ -82,7 +82,7 @@ class NDimensionalSpline(EventedModel):
         # prepend a zero, no distance has been covered
         # at start of spline parametrisation
         cumulative_distance = np.insert(cumulative_distance, 0, 0)
-        # save lenght for later and normalize
+        # save length for later and normalize
         self._length = cumulative_distance[-1]
         cumulative_distance /= self._length
 
