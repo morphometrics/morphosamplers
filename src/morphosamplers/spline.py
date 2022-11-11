@@ -177,6 +177,10 @@ class NDimensionalSpline(EventedModel):
         u = self._get_equidistance_u(separation)
         return self.sample_spline(u, derivative_order=derivative_order)
 
+    def reverse(self):
+        """Reverse the order of points and recompute the spline."""
+        self.points = self.points[::-1, :]
+
 
 class Spline3D(NDimensionalSpline):
     """3D spline model with a consistent local coordinate system.
