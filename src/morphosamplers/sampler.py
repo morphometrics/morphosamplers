@@ -169,7 +169,7 @@ def sample_volume_along_spline(
         Sampled volume.
     """
     u = np.linspace(0, 1, batch)
-    positions = spline.sample_spline(u)
+    positions = spline.sample(u)
     orientations = spline.sample_spline_orientations(u)
     grid = generate_2d_grid(grid_shape=grid_shape, grid_spacing=grid_spacing)
     sampling_coords = place_sampling_grids(grid, positions, orientations)
