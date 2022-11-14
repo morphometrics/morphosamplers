@@ -1,6 +1,6 @@
 """Tools for image resampling."""
 
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import einops
@@ -69,7 +69,7 @@ def generate_2d_grid(
     return einops.rearrange(grid, 'w h 1 xyz -> w h xyz')
 
 
-def generate_1D_grid(
+def generate_1d_grid(
     grid_shape: int = 10, grid_spacing: float = 1
 ) -> np.ndarray:
     """
@@ -91,7 +91,7 @@ def generate_1D_grid(
     np.ndarray
         Coordinate of points forming the 1D grid.
     """
-    return generate_3D_grid(grid_shape=(1, 1, grid_shape), grid_spacing=(1, 1, grid_spacing))
+    grid = generate_3d_grid(grid_shape=(1, 1, grid_shape), grid_spacing=(1, 1, grid_spacing))
     return einops.rearrange(grid, '1 1 d xyz -> w h xyz')
 
 
@@ -197,7 +197,7 @@ def sample_volume_along_spline(
         spline = Spline3D(points=spline)
     positions = spline.sample(separation=sampling_spacing)
     orientations = spline.sample_orientations(separation=sampling_spacing)
-    grid = generate_2D_grid(grid_shape=sampling_shape, grid_spacing=sampling_spacing)
+    grid = generate_2d_grid(grid_shape=sampling_shape, grid_spacing=sampling_spacing)
     sampling_coords = place_sampling_grids(grid, positions, orientations)
     return sample_volume_at_coordinates(
         volume, sampling_coords, interpolation_order=interpolation_order
@@ -275,7 +275,7 @@ def sample_volume_around_surface(
         surface = SplineSurfaceGrid(points=surface, separation=sampling_spacing)
     positions = surface.sample_surface()
     orientations = surface.sample_surface_orientations()
-    grid = generate_1D_grid(grid_shape=sampling_thickness, grid_spacing=sampling_spacing)
+    grid = generate_1d_grid(grid_shape=sampling_thickness, grid_spacing=sampling_spacing)
     sampling_coords = place_sampling_grids(grid, positions, orientations)
     sampled = sample_volume_at_coordinates(volume, sampling_coords, interpolation_order=interpolation_order)
     return sampled.reshape(*surface.grid_shape, sampling_thickness)
