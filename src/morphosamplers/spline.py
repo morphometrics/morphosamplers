@@ -45,7 +45,7 @@ class NDimensionalSpline(EventedModel):
 
     @root_validator(skip_on_failure=True)
     def validate_number_of_points(
-        cls, values: Dict[str, Union[np.ndarray, int]]
+            cls, values: Dict[str, Union[np.ndarray, int]]
     ) -> Dict[str, Union[np.ndarray, int]]:
         """Verify that the number of points > spline_order."""
         points: np.ndarray = values.get("points")
@@ -87,32 +87,32 @@ class NDimensionalSpline(EventedModel):
         cumulative_distance /= self._length
 
         # finally create a spline parametrized by the normalised cumulative distance
-        self._tck, _ = splprep(
-            samples.T, u=cumulative_distance, s=0, k=self.order
-        )
+        self._tck, _ = splprep(samples.T, u=cumulative_distance, s=0, k=self.order)
 
-    def sample_spline(
-        self, u: Union[float, np.ndarray], derivative_order: int = 0
+    def sample(
+            self,
+            u: Optional[Union[float, np.ndarray]] = None,
+            separation: Optional[float] = None,
+            derivative_order: int = 0
     ) -> np.ndarray:
-        """Sample points or derivatives along the equidistantly sampled spline.
+        """Sample points or derivatives on the spline.
 
-        This function
-        * maps values in the range [0, 1] to points on the smooth spline.
-        * yields equidistant samples along the filament for linearly spaced values of u.
-        If calculate_derivate=True then the derivative will be evaluated
-         and returned instead of spline points.
+        This function yields samples equidistant in Euclidean space
+        along the spline for linearly spaced values of u.
 
         Parameters
         ----------
-        u : Union[float, np.ndarray]
+        u : Optional[Union[float, np.ndarray]]
             The positions to sample the spline at. These are in the normalized
             spline coordinate, which spans [0, 1]
+        separation: Optional[float]
+            The desired separation between sampling points in Euclidean space.
         derivative_order : int
             Order of the derivative to evaluate at each spline position.
             If 0, the position on the spline is returned.
-            If >0, the derivative of position is returned (e.g., 1 for tangent vector).
-            derivative_order must be <= the spline order.
-            Default value is 0.
+            If greater than 0, the derivative of position is returned
+            (e.g., 1 for tangent vector). The derivative_order must be less than
+            or equal to the spline order. The default value is 0.
 
         Returns
         -------
@@ -122,60 +122,34 @@ class NDimensionalSpline(EventedModel):
             If calculate_derivative >0, returns derivative vectors.
         """
         if (derivative_order < 0) or (derivative_order > self.order):
-            # derivative order must be 0 < derivative_order < spline_order
             raise ValueError("derivative order must be [0, spline_order]")
-        u = np.atleast_1d(u)
+        if u is not None and separation is not None:
+            raise ValueError("only one of u and separation should be provided.")
+        if separation is not None:
+            u = self._get_equidistant_spline_coordinate_values(separation)
         samples = splev(np.atleast_1d(u), self._tck)
-        return np.stack(samples, axis=1) # (n, d)
+        return np.stack(samples, axis=1)  # (n, d)
 
-    def _get_equidistance_u(self, separation: float) -> np.ndarray:
-        """Get equally spaced values of u.
+    def _get_equidistant_spline_coordinate_values(self, separation: float) -> np.ndarray:
+        """Calculate spline coordinates for points with a given Euclidean separation.
 
         Parameters
         ----------
         separation : float
-            The distance between the u values in euclidian distance.
+            The Euclidean distance between desired spline samples.
 
         Returns
         -------
         u : np.ndarray
-            The array of equally-spaced spline coordinates..
+            The array of spline coordinate values.
         """
         n_points = int(self._length // separation)
         if n_points == 0:
-            raise ValueError(f'separation ({separation}) must be less than '
-                             f'length ({self._length})')
+            raise ValueError(
+                f'separation ({separation}) must be less than length ({self._length})'
+            )
         remainder = (self._length % separation) / self._length
         return np.linspace(0, 1 - remainder, n_points)
-
-    def _get_equidistance_spline_samples(
-        self, separation: float, derivative_order: int = 0
-    ) -> np.ndarray:
-        """Calculate equidistant spline samples with a defined separation.
-
-        Parameters
-        ----------
-        sepration : float
-            The distance between points in euclidian space.
-        derivative_order : int
-            Order of the derivative to evaluate at each spline position.
-            If 0, the position on the spline is returned.
-            If >0, the derivative of position is returned (e.g., 1 for tangent vector).
-            derivative_order must be <= the spline order.
-            Default value is 0.
-
-        Returns
-        -------
-        values : np.ndarray
-            The values along the spline.
-            If derivative_order is 0, returns positions.
-            If calculate_derivative >0, returns derivative vectors.
-        """
-        if (derivative_order < 0) or (derivative_order > self.order):
-            # derivative order must be 0 < derivative_order < spline_order
-            raise ValueError("derivative order must be [0, spline_order]")
-        u = self._get_equidistance_u(separation)
-        return self.sample_spline(u, derivative_order=derivative_order)
 
 
 class Spline3D(NDimensionalSpline):
@@ -222,7 +196,7 @@ class Spline3D(NDimensionalSpline):
 
     def _sample_spline_z(self, u: Union[float, np.ndarray]) -> np.ndarray:
         """Sample vectors tangent to the spline."""
-        z = self.sample_spline(u, derivative_order=1)
+        z = self.sample(u, derivative_order=1)
         z /= np.linalg.norm(z, axis=1, keepdims=True)
         return z
 
@@ -233,5 +207,5 @@ class Spline3D(NDimensionalSpline):
 
     def _get_equidistance_orientations(self, separation: float) -> Rotation:
         """Calculate orientations for equidistant samples with a defined separation."""
-        u = self._get_equidistance_u(separation)
+        u = self._get_equidistant_spline_coordinate_values(separation)
         return self.sample_spline_orientations(u)
