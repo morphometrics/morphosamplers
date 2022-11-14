@@ -2,7 +2,6 @@
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import einops
 import numpy as np
 from psygnal import EventedModel
 from pydantic import PrivateAttr, conint, root_validator, validator
@@ -19,6 +18,7 @@ class NDimensionalSpline(EventedModel):
     order: conint(ge=1, le=5) = 3
     smoothing: Optional[int] = None
     mask_limits: Tuple[int, int] = (0, -1)
+    closed: bool = False
     _n_spline_samples: int = PrivateAttr(10000)
     _tck = PrivateAttr(Tuple)
     _u_mask_limits: Tuple[float, float] = PrivateAttr(())
@@ -76,7 +76,13 @@ class NDimensionalSpline(EventedModel):
         """
         # oversample an initial spline to ensure better distance parametrisation
         u = np.linspace(0, 1, self._n_spline_samples)
-        tck, raw_u = splprep(self.points.T, s=0, k=self.order)
+
+        if self.closed:
+            points = np.append(self.points, self.points[:1], axis=0)
+        else:
+            points = self.points
+
+        tck, raw_u = splprep(points.T, s=0, k=self.order, per=self.closed)
         samples = np.stack(splev(u, tck), axis=1)
         u_mask_min, u_mask_max = raw_u[list(self.mask_limits)]
 
@@ -142,7 +148,7 @@ class NDimensionalSpline(EventedModel):
         """
         if (derivative_order < 0) or (derivative_order > self.order):
             raise ValueError("derivative order must be [0, spline_order]")
-        if sum(arg is not None for arg in (u, separation, n_samples)) > 1:
+        if sum(arg is not None for arg in (u, separation, n_samples)) != 1:
             raise ValueError("only one of u, separation or n_points should be provided.")
         if u is None:
             u = self._get_equidistant_spline_coordinate_values(separation=separation, n_samples=n_samples, masked=masked)
@@ -192,10 +198,10 @@ class NDimensionalSpline(EventedModel):
             min_u, max_u = 0, 1
 
         if n_samples is not None:
-            return np.linspace(min_u, max_u, n_samples)
+            remainder = 0
         elif separation is not None:
-            n_points = int(length / separation)
-            if n_points == 0:
+            n_samples = int(length / separation)
+            if n_samples == 0:
                 raise ValueError(f'separation ({separation}) must be less than '
                                  f'length ({length})')
             if approximate:
@@ -203,7 +209,7 @@ class NDimensionalSpline(EventedModel):
             else:
                 remainder = (length % separation) / length
 
-            return np.linspace(min_u, max_u - remainder, n_points)
+        return np.linspace(min_u, max_u - remainder, n_samples)
 
     def _get_mask_for_u(self, u):
         # we need to be careful here because there are precision issues with splines
@@ -255,7 +261,7 @@ class Spline3D(NDimensionalSpline):
         masked: bool = True,
     ) -> Rotation:
         """Local coordinate system at any point along the spline."""
-        if sum(arg is not None for arg in (u, separation, n_samples)) > 1:
+        if sum(arg is not None for arg in (u, separation, n_samples)) != 1:
             raise ValueError("only one of u, separation or n_points should be provided.")
         if u is None:
             u = self._get_equidistant_spline_coordinate_values(separation=separation, n_samples=n_samples, masked=masked)

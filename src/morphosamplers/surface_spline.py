@@ -51,7 +51,7 @@ class _SplineSurface(EventedModel):
         """Generate new control points for the given splines to fix edge artifacts"""
         # sample splines to get equidistant points on z slices
         us = [
-            spline._get_equidistance_u(separation, approximate=True)
+            spline._get_equidistant_spline_coordinate_values(separation=separation, approximate=True)
             for spline in splines
         ]
 
@@ -63,21 +63,18 @@ class _SplineSurface(EventedModel):
                 warnings.warn('The grid is deformed by more than 1 separation in some places. '
                               'This is inevitable with closed, non-cylindrical grids.')
             best_n = round(np.mean(n_points))
-            us = [spline._get_equidistance_u_by_n_points(best_n, masked=True) for spline in splines]
 
-            # we already have the masked values, we shouldn't do it again
-            points = [spline.sample_spline(u) for spline, u in zip(splines, us)]
+            points = [spline.sample(n_samples=best_n) for spline, u in zip(splines, us)]
 
             points = minimize_closed_point_strips_pair_distance(points, expected_dist=separation)
         else:
-
-            points = [spline.sample_spline(u) for spline, u in zip(splines, us)]
+            points = [spline.sample(u) for spline, u in zip(splines, us)]
 
             points = minimize_point_strips_pair_distance(points, expected_dist=separation, mode="nan")
 
             # extrapolate where nans are present by extending along the spline direction
             directions = [
-                spline.sample_spline(u, derivative_order=1)
+                spline.sample(u, derivative_order=1)
                 for spline, u in zip(splines, us)
             ]
 
@@ -88,19 +85,9 @@ class _SplineSurface(EventedModel):
         return points
 
     def _generate_splines(self):
-        if self.closed:
-            # repeat the first element, then add self.order elements at the end so the derivatives
-            # are correct otherwise there are kinks in the final closed surface
-            added = self.order + 1
-            points = [np.concatenate([p, p[:added]]) for p in self.points]
-            mask_limits = (0, -(added))
-        else:
-            points = self.points
-            mask_limits = (0, -1)
-
         self._splines = [
-            Spline3D(points=p, order=self.order, smoothing=self.smoothing, mask_limits=mask_limits)
-            for p in points
+            Spline3D(points=p, order=self.order, smoothing=self.smoothing, closed=self.closed)
+            for p in self.points
         ]
 
     def _generate_cross_splines(self):
@@ -131,7 +118,7 @@ class _SplineSurface(EventedModel):
 #             Spline3D(points=p, order=self.order, self.smoothing) for p in meta_spline_points
 #         ]
 #
-#     def sample_surface(self, separation):
+#     def sample(self, separation):
 #         """Sample approximately equidistant points on the surface.
 #
 #         Samples are optimized for maximum coverage of the surface following
@@ -146,7 +133,7 @@ class _SplineSurface(EventedModel):
 #         return deduplicate_points(np.concatenate(equidistant_points), separation / 2)
 #
 #
-# def sample_surface_orientations(self, separation, inside_point):
+# def sample_orientations(self, separation, inside_point):
 #     """Sample approximately equidistant orientations on the surface."""
 #     splines = self._generate_meta_splines(separation)
 #     equidistant_points = [
@@ -179,7 +166,13 @@ class SplineSurfaceGrid(_SplineSurface):
         # we finally create grid-like splines with optimized spacing
         # though not optimal for consistent spacing, we have to use the same n
         # for each spline, otherwise we end up with offset points in each lines
-        us = [spline._get_equidistance_u(self.separation, approximate=True) for spline in self._cross_splines]
+        us = [
+            spline._get_equidistant_spline_coordinate_values(
+                separation=self.separation,
+                approximate=True
+            )
+            for spline in self._cross_splines
+        ]
         n_points = [len(u) for u in us]
         diff = np.max(n_points) - np.min(n_points)
         if diff > 1:
@@ -191,7 +184,7 @@ class SplineSurfaceGrid(_SplineSurface):
         # TODO: actually use non-approximate linspace (with remainder) so we get as close as possible to
         #       a real grid. The problem with this is that we won't reach exactly the last spline
 
-        equidistant_points = [spline.sample_spline(u) for spline in self._cross_splines]
+        equidistant_points = [spline.sample(u) for spline in self._cross_splines]
 
         # these last splines should not be oversampled, because we want exact
         # positions for our knots, which we save in self._meta_meta_splines_u
@@ -207,7 +200,7 @@ class SplineSurfaceGrid(_SplineSurface):
             splines.append(splprep(p.T, s=0, k=self.order))
         self._grid_meta_splines = splines
 
-    def sample_surface(self):
+    def sample(self):
         """Sample an approximately equidistant grid of points on the surface.
 
         Samples are optimized for consistent separation and grid-like ordering, which
@@ -219,7 +212,7 @@ class SplineSurfaceGrid(_SplineSurface):
         ]
         return np.concatenate(equidistant_points)
 
-    def sample_surface_orientations(self, inside_point=None):
+    def sample_orientations(self, inside_point=None):
         """Sample an approximately equidistant grid of orientations on the surface."""
         equidistant_x_vecs = [
             np.stack(splev(u, tck, der=1), axis=1)
@@ -244,7 +237,7 @@ class SplineSurfaceGrid(_SplineSurface):
 
         if inside_point is not None:
             # use the inside point to put normal in correct direction
-            pts = self.sample_surface()
+            pts = self.sample()
             # get closest neighbour
             diffs = pts - inside_point
             closest_idx = np.argmin(np.linalg.norm(diffs, axis=1))
@@ -273,7 +266,7 @@ class SplineSurfaceHex(_SplineSurface):
         # we finally create grid-like splines with optimized spacing
         # though not optimal for consistent spacing, we have to use the same n
         # for each spline, otherwise we end up with offset points in each lines
-        us = [spline._get_equidistance_u(self.separation, approximate=True) for spline in self._cross_splines]
+        us = [spline._get_equidistant_spline_coordinate_values(separation=self.separation, approximate=True) for spline in self._cross_splines]
         best_n = int(np.mean([len(u) for u in us]))
 
         us = []
@@ -285,7 +278,7 @@ class SplineSurfaceHex(_SplineSurface):
                 us.append(np.linspace(offset, 1 - offset, best_n - 1))
 
         equidistant_points = [
-            spline.sample_spline(u)
+            spline.sample(u)
             for spline, u in zip(self._cross_splines, us)
         ]
 
@@ -309,7 +302,7 @@ class SplineSurfaceHex(_SplineSurface):
             splines_odd.append(splprep(p.T, s=0, k=self.order))
         self._hex_meta_splines_odd = splines_odd
 
-    def sample_surface(self):
+    def sample(self):
         """Sample an approximately equidistant grid of points on the surface.
 
         Samples are optimized for consistent separation and grid-like ordering, which
@@ -324,7 +317,7 @@ class SplineSurfaceHex(_SplineSurface):
             pts.append(np.concatenate(equidistant_points))
         return np.concatenate(pts)
 
-    def sample_surface_orientations(self, inside_point=None):
+    def sample_orientations(self, inside_point=None):
         """Sample an approximately equidistant grid of orientations on the surface."""
         rots = []
         for splines, meta_splines in (
@@ -356,7 +349,7 @@ class SplineSurfaceHex(_SplineSurface):
 
         if inside_point is not None:
             # use the inside point to put normal in correct direction
-            pts = self.sample_surface()
+            pts = self.sample()
             # get closest neighbour
             diffs = pts - inside_point
             closest_idx = np.argmin(np.linalg.norm(diffs, axis=1))
