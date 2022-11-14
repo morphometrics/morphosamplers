@@ -50,7 +50,7 @@ def test_sample_volume_along_spline():
     vol[1, 2, :] = 1
     pts = np.array([[1, 2, 0], [1, 2, 9]])
     spline = Spline3D(points=pts, order=1)
-    sampled = sample_volume_along_spline(vol, spline, batch=10, grid_shape=(3, 3))
+    sampled = sample_volume_along_spline(vol, spline, sampling_shape=(3, 3), sampling_spacing=1)
 
     # line of ones
     np.testing.assert_allclose(sampled[:, 1, 1], 1, atol=1e-8)

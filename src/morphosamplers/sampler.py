@@ -197,7 +197,7 @@ def sample_volume_along_spline(
         spline = Spline3D(points=spline)
     positions = spline.sample(separation=sampling_spacing)
     orientations = spline.sample_orientations(separation=sampling_spacing)
-    grid = generate_2d_grid(grid_shape=sampling_shape, grid_spacing=sampling_spacing)
+    grid = generate_2d_grid(grid_shape=sampling_shape, grid_spacing=(sampling_spacing, sampling_spacing))
     sampling_coords = place_sampling_grids(grid, positions, orientations)
     return sample_volume_at_coordinates(
         volume, sampling_coords, interpolation_order=interpolation_order
