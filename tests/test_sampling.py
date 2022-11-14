@@ -1,14 +1,14 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from morphosamplers.sampler import generate_2D_grid, generate_3D_grid, generate_sampling_coordinates, sample_volume_at_coordinates, sample_volume_along_spline, sample_subvolumes
+from morphosamplers.sampler import generate_2d_grid, generate_3d_grid, place_sampling_grids, sample_volume_at_coordinates, sample_volume_along_spline, sample_subvolumes
 from morphosamplers.spline import Spline3D
 
 
 def test_generate_2D_grid():
     shape = (3, 4)
     spacing = (2, 3)
-    grid = generate_2D_grid(grid_shape=shape, grid_spacing=spacing)
+    grid = generate_2d_grid(grid_shape=shape, grid_spacing=spacing)
     assert grid.shape == (*shape, 3)
     # x and y
     for axis in range(2):
@@ -22,7 +22,7 @@ def test_generate_2D_grid():
 def test_generate_3D_grid():
     shape = (2, 5, 3)
     spacing = (2, 1, 3)
-    grid = generate_3D_grid(grid_shape=shape, grid_spacing=spacing)
+    grid = generate_3d_grid(grid_shape=shape, grid_spacing=spacing)
     assert grid.shape == (*shape, 3)
     for axis in range(3):
         vals = np.swapaxes(grid[..., axis], axis, 0)
@@ -30,10 +30,10 @@ def test_generate_3D_grid():
 
 
 def test_generate_sampling_coordinates():
-    grid = generate_2D_grid((2, 2), (1, 1))
+    grid = generate_2d_grid((2, 2), (1, 1))
     pos = np.zeros((1, 3))
     ori = Rotation.identity(1)
-    coords = generate_sampling_coordinates(grid, pos, ori)
+    coords = place_sampling_grids(grid, pos, ori)
     assert coords.shape == (1, 2, 2, 3)
 
 
