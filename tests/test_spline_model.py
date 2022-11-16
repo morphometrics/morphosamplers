@@ -141,5 +141,5 @@ def test_spline_reverse():
     points = np.array([[0, 0, 0], [0, 0, 1], [0, 0, 2], [0, 0, 3]])
     spline = NDimensionalSpline(points=points)
     spline.reverse()
-    sample = spline.sample_spline(u=0)
+    sample = spline.sample(u=0)
     assert np.allclose(points[-1], sample)
