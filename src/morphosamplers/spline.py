@@ -45,7 +45,7 @@ class NDimensionalSpline(EventedModel):
 
     @root_validator(skip_on_failure=True)
     def validate_number_of_points(
-            cls, values: Dict[str, Union[np.ndarray, int]]
+        cls, values: Dict[str, Union[np.ndarray, int]]
     ) -> Dict[str, Union[np.ndarray, int]]:
         """Verify that the number of points > spline_order."""
         points: np.ndarray = values.get("points")
@@ -150,6 +150,10 @@ class NDimensionalSpline(EventedModel):
             )
         remainder = (self._length % separation) / self._length
         return np.linspace(0, 1 - remainder, n_points)
+
+    def reverse(self):
+        """Reverse the order of points and recompute the spline."""
+        self.points = self.points[::-1, :]
 
 
 class Spline3D(NDimensionalSpline):
