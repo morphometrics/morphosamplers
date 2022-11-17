@@ -154,7 +154,7 @@ class NDimensionalSpline(EventedModel):
             u = self._get_equidistant_spline_coordinate_values(separation=separation, n_samples=n_samples, masked=masked)
             masked = False  # already done
 
-        samples = splev(np.atleast_1d(u), self._tck)
+        samples = splev(np.atleast_1d(u), self._tck, der=derivative_order)
         return np.stack(samples, axis=1)  # (n, d)
 
         if masked:

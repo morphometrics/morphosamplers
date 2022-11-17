@@ -92,7 +92,7 @@ def generate_1d_grid(
         Coordinate of points forming the 1D grid.
     """
     grid = generate_3d_grid(grid_shape=(1, 1, grid_shape), grid_spacing=(1, 1, grid_spacing))
-    return einops.rearrange(grid, '1 1 d xyz -> w h xyz')
+    return einops.rearrange(grid, '1 1 d xyz -> d xyz')
 
 
 def place_sampling_grids(
@@ -273,8 +273,8 @@ def sample_volume_around_surface(
     """
     if not isinstance(surface, SplineSurfaceGrid):
         surface = SplineSurfaceGrid(points=surface, separation=sampling_spacing)
-    positions = surface.sample_surface()
-    orientations = surface.sample_surface_orientations()
+    positions = surface.sample()
+    orientations = surface.sample_orientations()
     grid = generate_1d_grid(grid_shape=sampling_thickness, grid_spacing=sampling_spacing)
     sampling_coords = place_sampling_grids(grid, positions, orientations)
     sampled = sample_volume_at_coordinates(volume, sampling_coords, interpolation_order=interpolation_order)

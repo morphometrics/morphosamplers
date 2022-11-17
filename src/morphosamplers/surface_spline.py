@@ -69,15 +69,13 @@ class _SplineSurface(EventedModel):
             points = minimize_closed_point_strips_pair_distance(points, expected_dist=separation)
         else:
             points = [spline.sample(u) for spline, u in zip(splines, us)]
-
-            points = minimize_point_strips_pair_distance(points, expected_dist=separation, mode="nan")
-
-            # extrapolate where nans are present by extending along the spline direction
             directions = [
                 spline.sample(u, derivative_order=1)
                 for spline, u in zip(splines, us)
             ]
 
+            # extrapolate where nans are present by extending along the spline direction
+            points = minimize_point_strips_pair_distance(points, expected_dist=separation, mode="nan")
             points = extrapolate_point_strips_with_direction(
                 points, directions, separation
             )
