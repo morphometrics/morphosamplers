@@ -127,7 +127,7 @@ class NDimensionalSpline(EventedModel):
             raise ValueError("only one of u and separation should be provided.")
         if separation is not None:
             u = self._get_equidistant_spline_coordinate_values(separation)
-        samples = splev(np.atleast_1d(u), self._tck)
+        samples = splev(np.atleast_1d(u), self._tck, der=derivative_order)
         return np.stack(samples, axis=1)  # (n, d)
 
     def _get_equidistant_spline_coordinate_values(self, separation: float) -> np.ndarray:
