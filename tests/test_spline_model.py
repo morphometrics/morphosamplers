@@ -134,3 +134,12 @@ def test_spline_orientations():
     np.testing.assert_allclose(pt, 0, atol=1e-20)
     ori = spline.sample_orientations(u=0)
     np.testing.assert_allclose(ori.apply([0, 0, 1]), [[0, 0, 1]])
+
+
+def test_spline_reverse():
+    """After reversing the last input point is the start when sampling."""
+    points = np.array([[0, 0, 0], [0, 0, 1], [0, 0, 2], [0, 0, 3]])
+    spline = NDimensionalSpline(points=points)
+    spline.reverse()
+    sample = spline.sample(u=0)
+    assert np.allclose(points[-1], sample)

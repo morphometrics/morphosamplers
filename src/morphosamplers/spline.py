@@ -50,7 +50,7 @@ class NDimensionalSpline(EventedModel):
 
     @root_validator(skip_on_failure=True)
     def validate_number_of_points(
-            cls, values: Dict[str, Union[np.ndarray, int]]
+        cls, values: Dict[str, Union[np.ndarray, int]]
     ) -> Dict[str, Union[np.ndarray, int]]:
         """Verify that the number of points > spline_order."""
         points: np.ndarray = values.get("points")
@@ -216,6 +216,10 @@ class NDimensionalSpline(EventedModel):
         # and sometimes we get values below or above the limits when they should be equal
         # so we use a special within_range function
         return within_range(np.atleast_1d(u), *self._u_mask_limits)
+
+    def reverse(self):
+        """Reverse the order of points and recompute the spline."""
+        self.points = self.points[::-1, :]
 
 
 class Spline3D(NDimensionalSpline):
