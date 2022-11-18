@@ -248,6 +248,7 @@ def sample_volume_around_surface(
     sampling_thickness: int,
     sampling_spacing: float,
     interpolation_order: int = 3,
+    masked: bool = False,
 ) -> np.ndarray:
     """
     Sample a volume around an arbitrary surface.
@@ -278,4 +279,6 @@ def sample_volume_around_surface(
     grid = generate_1d_grid(grid_shape=sampling_thickness, grid_spacing=sampling_spacing)
     sampling_coords = place_sampling_grids(grid, positions, orientations)
     sampled = sample_volume_at_coordinates(volume, sampling_coords, interpolation_order=interpolation_order)
+    if masked:
+        sampled[~surface.mask] = np.nan
     return sampled.reshape(*surface.grid_shape, sampling_thickness)

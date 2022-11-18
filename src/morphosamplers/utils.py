@@ -206,8 +206,31 @@ def extrapolate_point_strips_with_direction(strips, directions, separation):
 
 
 def within_range(arr, low, high, atol=1e-15):
+    """Determine which elements in an array are within a range, with a given tolerance."""
     diff_from_min = arr - low
     diff_from_max = arr - high
     above_min = (diff_from_min >= 0) | np.isclose(diff_from_min, 0, atol=atol)
     below_max = (diff_from_max <= 0) | np.isclose(diff_from_max, 0, atol=atol)
     return above_min & below_max
+
+
+def get_mask_limits(arr):
+    """Return the indices of the first and last True elements in a bool array."""
+    first = np.argmax(arr)
+    last = -np.argmax(arr[::-1]) or -1
+    return first, last
+
+
+def strip_true(arr):
+    """Strip the leading and trailing False from a bool array."""
+    first, last = get_mask_limits(arr)
+    return arr[first:last]
+
+
+def get_mask_limits(mask):
+    mask = np.pad(mask, 1)
+    beginnings = (mask ^ np.roll(mask, 1)) & mask
+    beginnings = np.where(beginnings)[0]
+    ends = (mask ^ np.roll(mask, -1)) & mask
+    ends = np.where(ends)[0]
+    return [(b - 1, e - 1) for b, e in zip(beginnings, ends) if b != e]
