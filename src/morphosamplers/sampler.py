@@ -264,9 +264,9 @@ def sample_volume_around_surface(
 
     For each "root" point on the surface, samples are extracted along a line normal
     to the surface, so that n=sampling_thickness points are extracted, centered on the surface.
-    The spacing between points on the surface and between the sampled points is equal to
-    sampling_spacing. The sampled lines are then re-packed into a volume with the same dimensions
-    as the surface, but "flattened".
+    The spacing between points on the surface (unless a pre-generated surface is given) and
+    between the sampled points is equal to sampling_spacing. The sampled lines are then
+    re-packed into a volume with the same dimensions as the surface, but "flattened".
 
     For example: a gridded surface of shape (50, 30), sampling_thickness of 10 and spacing of 3,
     will result in a sampled volume of shape (50, 30, 10) with three times the pixel size

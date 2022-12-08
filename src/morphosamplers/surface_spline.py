@@ -15,7 +15,6 @@ from .utils import (
     extrapolate_point_strips_with_direction,
     minimize_point_row_pair_distance,
     minimize_closed_point_strips_pair_distance,
-    get_mask_limits,
 )
 
 
@@ -27,7 +26,7 @@ class _SplineSurface(EventedModel):
     order: conint(ge=1, le=5) = 3
     smoothing: Optional[int] = None
     closed: bool = False
-    inside_point = Optional(Union[np.ndarray, Tuple[float, float, float]])
+    inside_point: Optional[Union[np.ndarray, Tuple[float, float, float]]] = None
     _row_splines = PrivateAttr(List[Spline3D])
     _column_splines = PrivateAttr(List[Spline3D])
 
@@ -104,14 +103,14 @@ class _SplineSurface(EventedModel):
         return points, masks
 
     def _generate_row_splines(self):
-        self._splines = [
+        self._row_splines = [
             Spline3D(points=p, order=self.order, smoothing=self.smoothing, closed=self.closed)
             for p in self.points
         ]
 
     def _generate_column_splines(self):
         # fix edge artifacts by extending splines until we have a grid
-        control_points, masks = self._fix_spline_edges(self._splines, self.separation, self.order)
+        control_points, masks = self._fix_spline_edges(self._row_splines, self.separation, self.order)
 
         if self.closed:
             # _fix_spline_edges returns strips including the extrema, so we need to remove
@@ -210,17 +209,16 @@ class GriddedSplineSurface(_SplineSurface):
         x and y vectors are aligned to the row and column splines respectively.
         """
         equidistant_x_vecs = [
-            np.stack(splev(u, tck, der=1), axis=1)
+            einops.rearrange(splev(u, tck, der=1), 'xyz column -> column xyz')
             for tck, u in self._grid_splines
         ]
         equidistant_y_vecs = [
-            np.stack(splev(u, tck, der=1), axis=1)
+            einops.rearrange(splev(u, tck, der=1), 'xyz row -> row xyz')
             for tck, u in self._grid_meta_splines
         ]
 
-        x = np.concatenate(equidistant_x_vecs)
-        # y vectors are generated on column-by-column basis, so we need to swap axes
-        y = einops.rearrange(equidistant_y_vecs, 'column row -> row column')
+        x = einops.rearrange(equidistant_x_vecs, 'row column xyz -> (row column) xyz')
+        y = einops.rearrange(equidistant_y_vecs, 'column row xyz -> (row column) xyz')
 
         y /= np.linalg.norm(y, axis=1, keepdims=True)
         x /= np.linalg.norm(x, axis=1, keepdims=True)
@@ -248,17 +246,17 @@ class GriddedSplineSurface(_SplineSurface):
 class HexSplineSurface(_SplineSurface):
     """Surface model defined by a grid of splines which generate a hex grid of samples."""
 
-    _hex_splines_even = PrivateAttr(List[Tuple])
-    _hex_splines_odd = PrivateAttr(List[Tuple])
-    _hex_meta_splines_even = PrivateAttr(List[Tuple])
-    _hex_meta_splines_odd = PrivateAttr(List[Tuple])
+    _row_splines_even = PrivateAttr(List[Tuple])
+    _row_splines_odd = PrivateAttr(List[Tuple])
+    _column_splines_even = PrivateAttr(List[Tuple])
+    _column_splines_odd = PrivateAttr(List[Tuple])
     _mask = PrivateAttr(np.ndarray)
 
     def _prepare_splines(self):
         super()._prepare_splines()
-        self._generate_hex_splines()
+        self._generate_offset_splines()
 
-    def _generate_hex_splines(self):
+    def _generate_offset_splines(self):
         # we finally create grid-like splines with optimized spacing
         # though not optimal for consistent spacing, we have to use the same n
         # for each spline, otherwise we end up with offset points in each lines
@@ -283,25 +281,26 @@ class HexSplineSurface(_SplineSurface):
         masks_odd = np.concatenate(np.stack(masks[1::2], axis=1))
         self._mask = np.concatenate([masks_even, masks_odd])
 
-        # alternate each cross spline to have points on same level
+        # alternate each row spline to have points on same level
         splines_even = []
         for p in np.stack(equidistant_points[::2], axis=1):
             splines_even.append(splprep(p.T, s=0, k=self.order))
-        self._hex_splines_even = splines_even
+        self._row_splines_even = splines_even
+
         splines_odd = []
         for p in np.stack(equidistant_points[1::2], axis=1):
             splines_odd.append(splprep(p.T, s=0, k=self.order))
-        self._hex_splines_odd = splines_odd
+        self._row_splines_odd = splines_odd
 
-        # cross splines
+        # then alternate columns splines
         splines_even = []
         for p in np.stack(equidistant_points[::2], axis=0):
             splines_even.append(splprep(p.T, s=0, k=self.order))
-        self._hex_meta_splines_even = splines_even
+        self._column_splines_even = splines_even
         splines_odd = []
         for p in np.stack(equidistant_points[1::2], axis=0):
             splines_odd.append(splprep(p.T, s=0, k=self.order))
-        self._hex_meta_splines_odd = splines_odd
+        self._column_splines_odd = splines_odd
 
     def sample(self):
         """Sample an approximately equidistant grid of points on the surface.
@@ -310,7 +309,7 @@ class HexSplineSurface(_SplineSurface):
         results in many discarded edges if the input differs a lot from a rectangle.
         """
         pts = []
-        for splines in (self._hex_splines_even, self._hex_splines_odd):
+        for splines in (self._row_splines_even, self._row_splines_odd):
             equidistant_points = [
                 np.stack(splev(u, tck), axis=1)
                 for tck, u in splines
@@ -326,8 +325,8 @@ class HexSplineSurface(_SplineSurface):
         """Sample an approximately equidistant grid of orientations on the surface."""
         rots = []
         for splines, meta_splines in (
-            (self._hex_splines_even, self._hex_meta_splines_even),
-            (self._hex_splines_odd, self._hex_meta_splines_odd),
+            (self._row_splines_even, self._column_splines_even),
+            (self._row_splines_odd, self._column_splines_odd),
         ):
             equidistant_x_vecs = [
                 np.stack(splev(u, tck, der=1), axis=1)
@@ -340,7 +339,8 @@ class HexSplineSurface(_SplineSurface):
 
             x = np.concatenate(equidistant_x_vecs)
             # y vectors are generated on column-by-column basis, so we need to swap axes
-            y = einops.rearrange(equidistant_y_vecs, 'column row -> row column')
+            y = einops.rearrange(equidistant_y_vecs, 'column row xyz-> row column xyz')
+            y = np.concatenate(equidistant_y_vecs)
 
             x /= np.linalg.norm(x, axis=1, keepdims=True)
             y /= np.linalg.norm(y, axis=1, keepdims=True)

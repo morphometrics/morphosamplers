@@ -129,7 +129,6 @@ class NDimensionalSpline(EventedModel):
             spline coordinate, which spans [0, 1].
         separation : Optional[float]
             The desired separation between sampling points in Euclidean space.
-            Canno
         n_samples : Optional[int]
             The total number of equidistant points to sample along the spline.
         derivative_order : int
