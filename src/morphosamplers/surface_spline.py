@@ -201,7 +201,7 @@ class GriddedSplineSurface(_SplineSurface):
     def mask(self):
         return self._mask
 
-    def sample_orientations(self, masked=False):
+    def sample_orientations(self):
         """Sample an approximately equidistant grid of orientations on the surface.
 
         Follows the same pattern as GriddedSplineSurface.sample(). Orientations are
@@ -241,6 +241,41 @@ class GriddedSplineSurface(_SplineSurface):
                 rots *= Rotation.from_euler("x", np.pi)
 
         return rots
+
+    def mesh(self) -> Tuple[np.array, np.array]:
+        """
+        A mesh representation of the surface.
+
+        For each quad in the grid, indices are generated following this pattern:
+        0--2  x--2
+        | /|  | /|
+        |/ |  |/ |
+        1--x  0--1
+
+        Returns
+        -------
+        Tuple[np.array, np.array]
+            Vertices coordinates (n, 3) and indices of vertices forming triangle faces (m, 3)
+        """
+        points = self.sample()
+        rows, columns = self.grid_shape
+        row_range = np.arange(rows)
+        column_range = np.arange(columns)
+
+        # first half of triangles
+        first_index = np.repeat(row_range[:-1], columns - 1) * columns + np.tile(column_range[:-1], rows - 1)
+        second_index = np.repeat(row_range[1:], columns - 1) * columns + np.tile(column_range[:-1], rows - 1)
+        third_index = np.repeat(row_range[:-1], columns - 1) * columns + np.tile(column_range[1:], rows - 1)
+        triangles_1 = np.stack([first_index, second_index, third_index], axis=1)
+
+        # second half
+        first_index = np.repeat(row_range[1:], columns - 1) * columns + np.tile(column_range[:-1], rows - 1)
+        second_index = np.repeat(row_range[1:], columns - 1) * columns + np.tile(column_range[1:], rows - 1)
+        third_index = np.repeat(row_range[:-1], columns - 1) * columns + np.tile(column_range[1:], rows - 1)
+        triangles_2 = np.stack([first_index, second_index, third_index], axis=1)
+
+        all_triangles = np.concatenate([triangles_1, triangles_2])
+        return points, all_triangles
 
 
 class HexSplineSurface(_SplineSurface):
