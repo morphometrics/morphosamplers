@@ -53,10 +53,10 @@ class NDimensionalSpline(EventedModel):
     ) -> Dict[str, Union[np.ndarray, int]]:
         """Verify that the number of points > spline_order."""
         points: np.ndarray = values.get("points")
-        n_points = points.shape[0]
+        n_samples = points.shape[0]
         spline_order: Optional[int] = values.get("order")
 
-        if spline_order is not None and n_points <= spline_order:
+        if spline_order is not None and n_samples <= spline_order:
             raise ValueError("number of points must be greater than spline order")
 
         return values
@@ -120,14 +120,16 @@ class NDimensionalSpline(EventedModel):
 
         This function yields samples equidistant in Euclidean space
         along the spline for linearly spaced values of u.
+        Only one of u, separation or n_samples should be provided.
 
         Parameters
         ----------
         u : Optional[Union[float, np.ndarray]]
             The positions to sample the spline at. These are in the normalized
-            spline coordinate, which spans [0, 1]
+            spline coordinate, which spans [0, 1].
         separation : Optional[float]
             The desired separation between sampling points in Euclidean space.
+            Canno
         n_samples : Optional[int]
             The total number of equidistant points to sample along the spline.
         derivative_order : int
@@ -147,7 +149,7 @@ class NDimensionalSpline(EventedModel):
         if (derivative_order < 0) or (derivative_order > self.order):
             raise ValueError("derivative order must be [0, spline_order]")
         if sum(arg is not None for arg in (u, separation, n_samples)) != 1:
-            raise ValueError("only one of u, separation or n_points should be provided.")
+            raise ValueError("only one of u, separation or n_samples should be provided.")
         if u is None:
             u = self._get_equidistant_spline_coordinate_values(separation=separation, n_samples=n_samples)
 
@@ -164,15 +166,17 @@ class NDimensionalSpline(EventedModel):
     ) -> np.ndarray:
         """Calculate spline coordinates for points with a given Euclidean separation.
 
+        Only one of separation or n_samples should be provided.
+
         Parameters
         ----------
         separation : float
             The Euclidean distance between desired spline samples.
-        n_points : int
+        n_samples : int
             The total number of equidistant points to sample along the spline.
         approximate : bool
             Approximate the separation in order to include the extrema.
-            Has no effect if n_points is provided.
+            Has no effect if n_samples is provided.
 
         Returns
         -------
@@ -180,7 +184,7 @@ class NDimensionalSpline(EventedModel):
             The array of spline coordinate values.
         """
         if separation is not None and n_samples is not None:
-            raise ValueError("only one of separation and n_points should be provided.")
+            raise ValueError("only one of separation and n_samples should be provided.")
 
         if n_samples is not None:
             remainder = 0
@@ -256,9 +260,13 @@ class Spline3D(NDimensionalSpline):
         separation: Optional[float] = None,
         n_samples: Optional[int] = None,
     ) -> Rotation:
-        """Local coordinate system at any point along the spline."""
+        """Local coordinate system at any point along the spline.
+
+
+        Only one of u, separation or n_samples should be provided.
+        """
         if sum(arg is not None for arg in (u, separation, n_samples)) != 1:
-            raise ValueError("only one of u, separation or n_points should be provided.")
+            raise ValueError("only one of u, separation or n_samples should be provided.")
         if u is None:
             u = self._get_equidistant_spline_coordinate_values(separation=separation, n_samples=n_samples)
 

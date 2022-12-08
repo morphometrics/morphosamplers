@@ -66,7 +66,7 @@ def calculate_y_vectors_from_z_vectors(
 
 
 def deduplicate_points(coords: np.ndarray, exclusion_radius: float) -> np.ndarray:
-    """Remove "duplicates" points from an array of coordinates.
+    """Remove "duplicates" points from an (n, 3) array of coordinates.
 
     Points are clustered with their neighbours if they are closer than exclusion_radius.
     Clusters are iteratively replaced with their centroid until no clusters remain.
@@ -110,24 +110,31 @@ def minimize_closed_point_strips_pair_distance(strips, expected_dist=None):
     return result
 
 
-def minimize_point_strips_pair_distance(strips, mode="crop", expected_dist=None):
-    """Minimize average pair distance at the same index between any number of point strips.
+def minimize_point_row_pair_distance(rows, mode="crop", expected_dist=None):
+    """Minimize average pair distance at the same index between any number of point rows.
 
-    Rolls each strip in order to minimize the euclidean distance
-    of each point in the strip relative to the points at the same index in the
-    neighbouring strips.
+    Given rows of points lying on curves (row, n, xyz), offsets indices in each row in order
+    to minimize the euclidean distance between points with the same index in neighbouring rows.
 
-    If mode is crop, crop all the strips so there are only valid values.
-    Otherwise, strips are padded with either their edge value or nans.
+    Once the optimal offsets are found, rows are padded on both ends so they are all the same length,
+    with either their edge value or nans depending on mode.
+
+    For example (- is nan, o is a real point, O are points that participated in the minimum distances):
+    -OOOo--
+    oOOO---
+    -OOOooo
     """
-    modes = ("crop", "nan", "edge")
+    modes = ("nan", "edge")
     if mode not in modes:
         raise ValueError(f"mode must be one of: {modes}")
 
     min_idx = 0
-    max_idx = max(len(s) for s in strips)
+    max_idx = max(len(s) for s in rows)
     offsets = [0]
-    for arr, next in zip(strips, strips[1:]):
+    # iterate over each row pair
+    for arr, next in zip(rows, rows[1:]):
+        # pad with enough nans to be able to offset the rows fully without having them roll over
+        # to the beginning
         arr_padded = np.pad(
             arr, ((len(next), len(next)), (0, 0)), constant_values=np.nan
         )
@@ -137,42 +144,41 @@ def minimize_point_strips_pair_distance(strips, mode="crop", expected_dist=None)
         tot_len = len(next) + len(arr) + len(next)
         best_roll_idx = None
         best_dist = None
+        # iterate over all possible offset values
         for i in range(tot_len):
+            # roll the next row by 1 relative to the previous iteration
             next_rolled = np.roll(next_padded, i, axis=0)
+            # calculate distance for each index pair and average it ignoring nans
             roll_dist = np.linalg.norm(arr_padded - next_rolled, axis=1)
             avg_dist = np.nanmean(roll_dist)
             if np.isnan(avg_dist):
                 continue
             if best_dist is None or avg_dist < best_dist:
+                # if we got a lower average, save this as the best offset
                 best_dist = avg_dist
                 best_roll_idx = i
         if expected_dist is not None and best_dist >= expected_dist * np.sqrt(2):
             warnings.warn('The grid is sheared by more than 1 separation in some places', stacklevel=2)
+
+        # we have the offset that minimises distances
         offset = best_roll_idx - len(next)
         total_offset = offset + offsets[-1]
         offsets.append(total_offset)
 
-    # construct final aligned arrays
+    # construct final aligned arrays by offsetting each row by the optimal offset and padding
+    # everything so that the lengths are all equal
     aligned = []
-
-    if mode == "crop":
-        min_idx = max(offsets)
-        max_idx = min(o + len(a) for o, a in zip(offsets, strips))
-        for arr, offset in zip(strips, offsets):
-            cropped = arr[min_idx - offset : max_idx - offset]
-            aligned.append(cropped)
-    else:
-        if mode == "edge":
-            kwargs = {"mode": "edge"}
-        elif mode == "nan":
-            kwargs = {"mode": "constant", "constant_values": np.nan}
-        min_idx = min(offsets)
-        max_idx = max(o + len(a) for o, a in zip(offsets, strips))
-        for arr, offset in zip(strips, offsets):
-            padded = np.pad(
-                arr, ((offset - min_idx, max_idx - offset - len(arr)), (0, 0)), **kwargs
-            )
-            aligned.append(padded)
+    if mode == "edge":
+        pad_kwargs = {"mode": "edge"}
+    elif mode == "nan":
+        pad_kwargs = {"mode": "constant", "constant_values": np.nan}
+    min_idx = min(offsets)
+    max_idx = max(o + len(a) for o, a in zip(offsets, rows))
+    for arr, offset in zip(rows, offsets):
+        padded = np.pad(
+            arr, ((offset - min_idx, max_idx - offset - len(arr)), (0, 0)), **pad_kwargs
+        )
+        aligned.append(padded)
     return aligned
 
 
@@ -206,19 +212,16 @@ def extrapolate_point_strips_with_direction(strips, directions, separation):
 
 
 def within_range(arr, low, high, atol=1e-15):
-    """Determine which elements in an array are within a range, with a given tolerance."""
+    """Determine which elements in an array are within a range, with a given tolerance.
+
+    Equivalent to np.where(np.logical_and(arr>=low, arr<=high)), but with tolerance
+    for numerical imprecision.
+    """
     diff_from_min = arr - low
     diff_from_max = arr - high
     above_min = (diff_from_min >= 0) | np.isclose(diff_from_min, 0, atol=atol)
     below_max = (diff_from_max <= 0) | np.isclose(diff_from_max, 0, atol=atol)
     return above_min & below_max
-
-
-def get_mask_limits(arr):
-    """Return the indices of the first and last True elements in a bool array."""
-    first = np.argmax(arr)
-    last = -np.argmax(arr[::-1]) or -1
-    return first, last
 
 
 def strip_true(arr):

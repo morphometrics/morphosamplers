@@ -8,7 +8,7 @@ from scipy.ndimage import map_coordinates
 from scipy.spatial.transform import Rotation
 
 from .spline import Spline3D
-from .surface_spline import SplineSurfaceGrid
+from .surface_spline import GriddedSplineSurface
 
 
 def generate_3d_grid(
@@ -174,6 +174,15 @@ def sample_volume_along_spline(
     """
     Extract planes from a volume following a spline path.
 
+    Extracted planes are equidistant along the spline, and perpendicular to
+    the spline derivative. The size of the planes is defined by the sampling_shape,
+    and the distance between planes and between sample points on the plane is
+    equal to sampling_spacing.
+
+    For example: a spline of euclidean length 30, sampling_shape of (10, 10) and spacing of
+    2, will result in a sampled volume of shape (15, 10, 10) with twice the pixel size
+    of the original volume.
+
     Parameters
     ----------
     volume : np.ndarray
@@ -244,14 +253,24 @@ def sample_subvolumes(
 
 def sample_volume_around_surface(
     volume: np.ndarray,
-    surface: Union[np.ndarray, SplineSurfaceGrid],
+    surface: Union[np.ndarray, GriddedSplineSurface],
     sampling_thickness: int,
     sampling_spacing: float,
     interpolation_order: int = 3,
     masked: bool = False,
 ) -> np.ndarray:
     """
-    Sample a volume around an arbitrary surface.
+    Sample a volume around an arbitrary gridded surface.
+
+    For each "root" point on the surface, samples are extracted along a line normal
+    to the surface, so that n=sampling_thickness points are extracted, centered on the surface.
+    The spacing between points on the surface and between the sampled points is equal to
+    sampling_spacing. The sampled lines are then re-packed into a volume with the same dimensions
+    as the surface, but "flattened".
+
+    For example: a gridded surface of shape (50, 30), sampling_thickness of 10 and spacing of 3,
+    will result in a sampled volume of shape (50, 30, 10) with three times the pixel size
+    of the original volume.
 
     Parameters
     ----------
@@ -272,8 +291,8 @@ def sample_volume_around_surface(
     np.ndarray
         Sampled volume.
     """
-    if not isinstance(surface, SplineSurfaceGrid):
-        surface = SplineSurfaceGrid(points=surface, separation=sampling_spacing)
+    if not isinstance(surface, GriddedSplineSurface):
+        surface = GriddedSplineSurface(points=surface, separation=sampling_spacing)
     positions = surface.sample()
     orientations = surface.sample_orientations()
     grid = generate_1d_grid(grid_shape=sampling_thickness, grid_spacing=sampling_spacing)
