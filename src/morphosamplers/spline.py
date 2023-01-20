@@ -8,7 +8,7 @@ from pydantic import PrivateAttr, conint, root_validator, validator
 from scipy.interpolate import splev, splprep
 from scipy.spatial.transform import Rotation, Slerp
 
-from .utils import calculate_y_vectors_from_z_vectors
+from .utils import calculate_y_vectors_from_z_vectors, within_range, get_mask_limits
 
 
 class NDimensionalSpline(EventedModel):
@@ -16,8 +16,12 @@ class NDimensionalSpline(EventedModel):
 
     points: np.ndarray
     order: conint(ge=1, le=5) = 3
+    smoothing: Optional[int] = None
+    mask: Optional[np.ndarray] = None
+    closed: bool = False
     _n_spline_samples: int = PrivateAttr(10000)
     _tck = PrivateAttr(Tuple)
+    _u_mask_limits: List[Tuple[float, float]] = PrivateAttr([])
     _length = PrivateAttr(float)
 
     class Config:
@@ -25,9 +29,9 @@ class NDimensionalSpline(EventedModel):
 
         arbitrary_types_allowed = True
 
-    def __init__(self, points: np.ndarray, order: int = 3):
+    def __init__(self, **kwargs):
         """Calculate the splines after validating the paramters."""
-        super().__init__(points=points, order=order)
+        super().__init__(**kwargs)
         self._prepare_spline()
 
     @property
@@ -49,10 +53,10 @@ class NDimensionalSpline(EventedModel):
     ) -> Dict[str, Union[np.ndarray, int]]:
         """Verify that the number of points > spline_order."""
         points: np.ndarray = values.get("points")
-        n_points = points.shape[0]
+        n_samples = points.shape[0]
         spline_order: Optional[int] = values.get("order")
 
-        if spline_order is not None and n_points <= spline_order:
+        if spline_order is not None and n_samples <= spline_order:
             raise ValueError("number of points must be greater than spline order")
 
         return values
@@ -60,7 +64,7 @@ class NDimensionalSpline(EventedModel):
     def __setattr__(self, name: str, value: Any) -> None:
         """Overwritten so that splines are recalculated when points are updated."""
         super().__setattr__(name, value)
-        if name in ("points", "order"):  # ensure splines stay in sync
+        if name in ("points", "order", "smoothing", "mask"):  # ensure splines stay in sync
             self._prepare_spline()
 
     def _prepare_spline(self) -> None:
@@ -71,7 +75,13 @@ class NDimensionalSpline(EventedModel):
         """
         # oversample an initial spline to ensure better distance parametrisation
         u = np.linspace(0, 1, self._n_spline_samples)
-        tck, _ = splprep(self.points.T, s=0, k=self.order)
+
+        if self.closed:
+            points = np.append(self.points, self.points[:1], axis=0)
+        else:
+            points = self.points
+
+        tck, raw_u = splprep(points.T, s=0, k=self.order, per=self.closed)
         samples = np.stack(splev(u, tck), axis=1)
 
         # calculate the cumulative length of line segments
@@ -84,29 +94,43 @@ class NDimensionalSpline(EventedModel):
         cumulative_distance = np.insert(cumulative_distance, 0, 0)
         # save length for later and normalize
         self._length = cumulative_distance[-1]
+
+        if self.mask is not None:
+            limits = get_mask_limits(self.mask)
+            u_ranges = []
+            for low_idx, high_idx in limits:
+                u_low, u_high = raw_u[[low_idx, high_idx]]
+                u_ranges.append((u_low, u_high))
+            self._u_mask_limits = u_ranges
+
         cumulative_distance /= self._length
 
-        # finally create a spline parametrized by the normalised cumulative distance
-        self._tck, _ = splprep(samples.T, u=cumulative_distance, s=0, k=self.order)
+        self._tck, u = splprep(
+            samples.T, u=cumulative_distance, s=0, k=self.order
+        )
 
     def sample(
-            self,
-            u: Optional[Union[float, np.ndarray]] = None,
-            separation: Optional[float] = None,
-            derivative_order: int = 0
+        self,
+        u: Optional[Union[float, np.ndarray]] = None,
+        separation: Optional[float] = None,
+        n_samples: Optional[int] = None,
+        derivative_order: int = 0,
     ) -> np.ndarray:
         """Sample points or derivatives on the spline.
 
         This function yields samples equidistant in Euclidean space
         along the spline for linearly spaced values of u.
+        Only one of u, separation or n_samples should be provided.
 
         Parameters
         ----------
         u : Optional[Union[float, np.ndarray]]
             The positions to sample the spline at. These are in the normalized
-            spline coordinate, which spans [0, 1]
-        separation: Optional[float]
+            spline coordinate, which spans [0, 1].
+        separation : Optional[float]
             The desired separation between sampling points in Euclidean space.
+        n_samples : Optional[int]
+            The total number of equidistant points to sample along the spline.
         derivative_order : int
             Order of the derivative to evaluate at each spline position.
             If 0, the position on the spline is returned.
@@ -123,33 +147,71 @@ class NDimensionalSpline(EventedModel):
         """
         if (derivative_order < 0) or (derivative_order > self.order):
             raise ValueError("derivative order must be [0, spline_order]")
-        if u is not None and separation is not None:
-            raise ValueError("only one of u and separation should be provided.")
-        if separation is not None:
-            u = self._get_equidistant_spline_coordinate_values(separation)
-        samples = splev(np.atleast_1d(u), self._tck, der=derivative_order)
-        return np.stack(samples, axis=1)  # (n, d)
+        if sum(arg is not None for arg in (u, separation, n_samples)) != 1:
+            raise ValueError("only one of u, separation or n_samples should be provided.")
+        if u is None:
+            u = self._get_equidistant_spline_coordinate_values(separation=separation, n_samples=n_samples)
 
-    def _get_equidistant_spline_coordinate_values(self, separation: float) -> np.ndarray:
+        samples = splev(np.atleast_1d(u), self._tck, der=derivative_order)
+        samples = np.stack(samples, axis=1)  # (n, d)
+
+        return samples
+
+    def _get_equidistant_spline_coordinate_values(
+        self,
+        separation: Optional[float] = None,
+        n_samples: Optional[int] = None,
+        approximate: bool = False,
+    ) -> np.ndarray:
         """Calculate spline coordinates for points with a given Euclidean separation.
+
+        Only one of separation or n_samples should be provided.
 
         Parameters
         ----------
         separation : float
             The Euclidean distance between desired spline samples.
+        n_samples : int
+            The total number of equidistant points to sample along the spline.
+        approximate : bool
+            Approximate the separation in order to include the extrema.
+            Has no effect if n_samples is provided.
 
         Returns
         -------
         u : np.ndarray
             The array of spline coordinate values.
         """
-        n_points = int(self._length // separation)
-        if n_points == 0:
-            raise ValueError(
-                f'separation ({separation}) must be less than length ({self._length})'
-            )
-        remainder = (self._length % separation) / self._length
-        return np.linspace(0, 1 - remainder, n_points)
+        if separation is not None and n_samples is not None:
+            raise ValueError("only one of separation and n_samples should be provided.")
+
+        if n_samples is not None:
+            remainder = 0
+        elif separation is not None:
+            n_samples = int(self._length / separation)
+            if n_samples == 0:
+                raise ValueError(f'separation ({separation}) must be less than '
+                                 f'length ({self._length})')
+            if approximate:
+                remainder = 0
+            else:
+                remainder = (self._length % separation) / self._length
+
+        return np.linspace(0, 1 - remainder, n_samples)
+
+    def get_mask_for_u(self, u):
+        """Get a 1D boolean mask for a given u.
+
+        The mask is True where values should be kept.
+        """
+        # we need to be careful here because there are precision issues with splines
+        # and sometimes we get values below or above the limits when they should be equal
+        # so we use a special within_range function
+        u = np.atleast_1d(u)
+        mask = np.zeros_like(u, bool)
+        for low, high in self._u_mask_limits:
+            mask[within_range(u, low, high)] = 1
+        return mask
 
     def reverse(self):
         """Reverse the order of points and recompute the spline."""
@@ -157,7 +219,7 @@ class NDimensionalSpline(EventedModel):
 
 
 class Spline3D(NDimensionalSpline):
-    """3D spline model with a consistent local coordinate system.
+    """3D spline model with interpolation of orientations along the spline.
 
     Basis vectors for a local coordinate system along the spline can be calculated.
     In this coordinate system, z vectors are tangent to the spline and the xy-plane
@@ -181,7 +243,7 @@ class Spline3D(NDimensionalSpline):
 
         This method constructs a set of rotation matrices which vary smoothly with
         the spline coordinate `u`. A sampler is then prepared which can be queried at
-        any point(s) along the spline coordinate `u` and the resulting rotations vary 
+        any point(s) along the spline coordinate `u` and the resulting rotations vary
         smoothly along the spline
         """
         u = np.linspace(0, 1, num=self._n_spline_samples)
@@ -191,11 +253,26 @@ class Spline3D(NDimensionalSpline):
         r = Rotation.from_matrix(np.stack([x, y, z], axis=-1))
         self._rotation_sampler = Slerp(u, r)
 
-    def sample_spline_orientations(self, u: Union[float, np.ndarray]):
-        """Local coordinate system at any point along the spline."""
+    def sample_orientations(
+        self,
+        u: Optional[Union[float, np.ndarray]] = None,
+        separation: Optional[float] = None,
+        n_samples: Optional[int] = None,
+    ) -> Rotation:
+        """Local coordinate system at any point along the spline.
+
+
+        Only one of u, separation or n_samples should be provided.
+        """
+        if sum(arg is not None for arg in (u, separation, n_samples)) != 1:
+            raise ValueError("only one of u, separation or n_samples should be provided.")
+        if u is None:
+            u = self._get_equidistant_spline_coordinate_values(separation=separation, n_samples=n_samples)
+
         rot = self._rotation_sampler(u)
         if rot.single:
             rot = Rotation.concatenate([rot])
+
         return rot
 
     def _sample_spline_z(self, u: Union[float, np.ndarray]) -> np.ndarray:
@@ -206,10 +283,5 @@ class Spline3D(NDimensionalSpline):
 
     def _sample_spline_y(self, u: Union[float, np.ndarray]) -> np.ndarray:
         """Sample vectors perpendicular to the spline."""
-        rotations = self.sample_spline_orientations(u)
+        rotations = self.sample_orientations(u)
         return rotations.as_matrix()[..., 1]
-
-    def _get_equidistance_orientations(self, separation: float) -> Rotation:
-        """Calculate orientations for equidistant samples with a defined separation."""
-        u = self._get_equidistant_spline_coordinate_values(separation)
-        return self.sample_spline_orientations(u)

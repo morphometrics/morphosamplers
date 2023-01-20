@@ -1,6 +1,6 @@
 """Tools for image resampling."""
 
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import einops
@@ -8,6 +8,7 @@ from scipy.ndimage import map_coordinates
 from scipy.spatial.transform import Rotation
 
 from .spline import Spline3D
+from .surface_spline import GriddedSplineSurface
 
 
 def generate_3d_grid(
@@ -66,6 +67,32 @@ def generate_2d_grid(
     """
     grid = generate_3d_grid(grid_shape=(*grid_shape, 1), grid_spacing=(*grid_spacing, 1))
     return einops.rearrange(grid, 'w h 1 xyz -> w h xyz')
+
+
+def generate_1d_grid(
+    grid_shape: int = 10, grid_spacing: float = 1
+) -> np.ndarray:
+    """
+    Generate a 1D sampling grid with specified shape and spacing.
+
+    The grid generated is centered on the origin, lying along the vector
+    [0, 0, 1], has shape (m, 3) for grid_shape m, and spacing grid_spacing
+    between neighboring points.
+
+    Parameters
+    ----------
+    grid_shape : int
+        The number of grid points.
+    grid_spacing : float
+        Spacing between points in the sampling grid.
+
+    Returns
+    -------
+    np.ndarray
+        Coordinate of points forming the 1D grid.
+    """
+    grid = generate_3d_grid(grid_shape=(1, 1, grid_shape), grid_spacing=(1, 1, grid_spacing))
+    return einops.rearrange(grid, '1 1 d xyz -> d xyz')
 
 
 def place_sampling_grids(
@@ -139,27 +166,34 @@ def sample_volume_at_coordinates(
 
 def sample_volume_along_spline(
     volume: np.ndarray,
-    spline: Spline3D,
-    batch: int = 100,
-    grid_shape: Tuple[int, int] = (10, 10),
-    grid_spacing: Tuple[float, float] = (1, 1),
+    spline: Union[np.ndarray, Spline3D],
+    sampling_shape: Tuple[int, int] = (10, 10),
+    sampling_spacing: float = 1,
     interpolation_order: int = 3,
 ) -> np.ndarray:
     """
-    Extract volume planes from a volume following a spline path.
+    Extract planes from a volume following a spline path.
+
+    Extracted planes are equidistant along the spline, and perpendicular to
+    the spline derivative. The size of the planes is defined by the sampling_shape,
+    and the distance between planes and between sample points on the plane is
+    equal to sampling_spacing.
+
+    For example: a spline of euclidean length 30, sampling_shape of (10, 10) and spacing of
+    2, will result in a sampled volume of shape (15, 10, 10) with twice the pixel size
+    of the original volume.
 
     Parameters
     ----------
     volume : np.ndarray
         Volume to be sampled.
     spline : Spline3D
-        Spline object along which to sample the volume.
-    batch : int
-        Number of samples to take along the spline.
-    grid_shape : Tuple[int, int]
-        Shape of the 2D grid.
-    grid_spacing : Tuple[float, float]
-        Spacing between points in the sampling grid.
+        Array of points to use to generate the spline, or Spline object,
+        along which to sample the volume.
+    sampling_shape : Tuple[int, int]
+        The number of points along each axis of the grid used for plane sampling.
+    sampling_spacing : Tuple[float, float]
+        Spacing between points in the sampling grid and along the spline.
     interpolation_order : int
         Spline order for image interpolation.
 
@@ -168,10 +202,11 @@ def sample_volume_along_spline(
     np.ndarray
         Sampled volume.
     """
-    u = np.linspace(0, 1, batch)
-    positions = spline.sample(u)
-    orientations = spline.sample_spline_orientations(u)
-    grid = generate_2d_grid(grid_shape=grid_shape, grid_spacing=grid_spacing)
+    if not isinstance(spline, Spline3D):
+        spline = Spline3D(points=spline)
+    positions = spline.sample(separation=sampling_spacing)
+    orientations = spline.sample_orientations(separation=sampling_spacing)
+    grid = generate_2d_grid(grid_shape=sampling_shape, grid_spacing=(sampling_spacing, sampling_spacing))
     sampling_coords = place_sampling_grids(grid, positions, orientations)
     return sample_volume_at_coordinates(
         volume, sampling_coords, interpolation_order=interpolation_order
@@ -214,3 +249,55 @@ def sample_subvolumes(
     return sample_volume_at_coordinates(
         volume, sampling_coords, interpolation_order=interpolation_order
     )
+
+
+def sample_volume_around_surface(
+    volume: np.ndarray,
+    surface: Union[np.ndarray, GriddedSplineSurface],
+    sampling_thickness: int,
+    sampling_spacing: float,
+    interpolation_order: int = 3,
+    masked: bool = False,
+) -> np.ndarray:
+    """
+    Sample a volume around an arbitrary gridded surface.
+
+    For each "root" point on the surface, samples are extracted along a line normal
+    to the surface, so that n=sampling_thickness points are extracted, centered on the surface.
+    The spacing between points on the surface (unless a pre-generated surface is given) and
+    between the sampled points is equal to sampling_spacing. The sampled lines are then
+    re-packed into a volume with the same dimensions as the surface, but "flattened".
+
+    For example: a gridded surface of shape (50, 30), sampling_thickness of 10 and spacing of 3,
+    will result in a sampled volume of shape (50, 30, 10) with three times the pixel size
+    of the original volume.
+
+    Parameters
+    ----------
+    volume : np.ndarray
+        Volume to be sampled.
+    surface : Union[np.ndarray, SplineSurfaceGrid]
+        Array of points to be used to generate a surface, or SplineSurfaceGrid object,
+        along which to sample the volume.
+    sampling_thickness : int
+        Thickness of sampled surface in pixels.
+    sampling_spacing : float
+        Spacing between sampled pixels.
+    interpolation_order : int
+        Spline order for image interpolation.
+
+    Returns
+    -------
+    np.ndarray
+        Sampled volume.
+    """
+    if not isinstance(surface, GriddedSplineSurface):
+        surface = GriddedSplineSurface(points=surface, separation=sampling_spacing)
+    positions = surface.sample()
+    orientations = surface.sample_orientations()
+    grid = generate_1d_grid(grid_shape=sampling_thickness, grid_spacing=sampling_spacing)
+    sampling_coords = place_sampling_grids(grid, positions, orientations)
+    sampled = sample_volume_at_coordinates(volume, sampling_coords, interpolation_order=interpolation_order)
+    if masked:
+        sampled[~surface.mask] = np.nan
+    return sampled.reshape(*surface.grid_shape, sampling_thickness)
