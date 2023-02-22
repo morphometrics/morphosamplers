@@ -100,15 +100,21 @@ def test_invalid_spline_order(spline_order):
         _ = NDimensionalSpline(points=points, order=spline_order)
 
 
-less_points = np.array([[0, 0]])
 equal_points = np.array([[0, 0], [1, 1]])
 
 
-@pytest.mark.parametrize("points", [less_points, equal_points])
-def test_invalid_number_points(points):
+def test_spline_too_few_points():
     """Number of points should be greater than the spline order."""
+    points = np.array([[0, 0], [1, 1]])
+
+    # one point can never work
     with pytest.raises(ValidationError):
-        _ = NDimensionalSpline(points=points, order=2)
+        spline = NDimensionalSpline(points=points[:1], order=2)
+
+    # with other numbers of points, the order should be lowered to match
+    with pytest.warns(UserWarning):
+        spline = NDimensionalSpline(points=points, order=2)
+    assert spline.order == len(points) - 1
 
 
 @pytest.mark.parametrize("derivative_order", [-1, 4])

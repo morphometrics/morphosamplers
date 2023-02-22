@@ -30,6 +30,7 @@ class _SplineSurface(EventedModel):
     inside_point: Optional[Union[np.ndarray, Tuple[float, float, float]]] = None
     _row_splines = PrivateAttr(List[Spline3D])
     _column_splines = PrivateAttr(List[Spline3D])
+    _oversampling_ratio = 10
 
     class Config:
         """Pydantic BaseModel configuration."""
@@ -75,7 +76,8 @@ class _SplineSurface(EventedModel):
         self._generate_row_splines()
         self._generate_column_splines()
 
-    def _fix_spline_edges(self, splines, separation, order):
+    @classmethod
+    def _fix_spline_edges(cls, splines, separation, order, closed):
         """
         Generate new control points for each spline to ensure a minimally deformed grid.
 
@@ -91,12 +93,13 @@ class _SplineSurface(EventedModel):
         shear by minimising the mean distance between samples at the same intex in neighboring rows.
         """
         # sample splines to get equidistant points on z slices
+        separation = separation / cls._oversampling_ratio
         us = [
             spline._get_equidistant_spline_coordinate_values(separation=separation, approximate=True)
             for spline in splines
         ]
 
-        if self.closed:
+        if closed:
             # We need the same amount of samples on each row to make a rectangular grid,
             # but we can't extend/pad a closed surface, so instead we take n_samples from each
             # so that on average we get a good approximation of the given separation
@@ -143,12 +146,16 @@ class _SplineSurface(EventedModel):
 
     def _generate_column_splines(self):
         # fix edge artifacts by extending splines until we have a grid
-        control_points, masks = self._fix_spline_edges(self._row_splines, self.separation, self.order)
+        control_points, masks = self._fix_spline_edges(self._row_splines, self.separation, self.order, self.closed)
 
         if self.closed:
             # _fix_spline_edges returns strips including the extrema, so we need to remove
             # one of them if the surface is closed to avoid duplication
             control_points = [p[:-1] for p in control_points]
+
+        # _fix_spline_edges oversamples to avoid artifacts, so we only take every N points
+        control_points = np.stack(control_points)[:, ::self._oversampling_ratio]
+        masks = np.stack(masks)[:, ::self._oversampling_ratio]
 
         # stack points in the other direction, so we get the column-splines
         stacked = einops.rearrange(control_points, 'row column xyz -> column row xyz')
@@ -265,7 +272,13 @@ class GriddedSplineSurface(_SplineSurface):
         z = np.cross(x, y)
         z /= np.linalg.norm(z, axis=1, keepdims=True)
 
-        rots = Rotation.from_matrix(np.stack([x, y, z], axis=-1))
+        # since x and y are not guaranteed to be orthogonal, we re-generate y to get
+        # perfectly orthogonal so we end up with determinant == 1
+        x = np.cross(y, z)
+        x /= np.linalg.norm(x, axis=1, keepdims=True)
+
+        mat = np.stack([x, y, z], axis=-1)
+        rots = Rotation.from_matrix(mat)
 
         if self.inside_point is not None:
             # use the inside point to put normal in correct direction

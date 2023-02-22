@@ -65,6 +65,7 @@ class NDimensionalSpline(EventedModel):
                 f'Too few points for spline of order {spline_order}. '
                 f'Decreasing order to {new_order}'
             )
+            values['order'] = new_order
 
         return values
 

@@ -115,29 +115,21 @@ def estimate_point_row_directions(rows):
     Guess the directionality of rows of points relative to each other.
 
     Returns a list of 1 or -1 that can be used as slice steps to index into
-    each row and obtain correctly oriented rows. The estimation is done
-    heuristically, assuming that rows of points that are in the "wrong" direction
-    will result in pair-distances that are higher than the "right" direction.
+    each row and obtain correctly oriented rows.
 
-    NOTE: might not work well with very different lengths or with rows
-    that have very little overlap in space. These cases are likely
-    impossible to guess consistently.
+    Direction is assumed to need inversion if the extrema of two subsequent rows
+    are closer to each other when swapped.
     """
     directions = [1]
     for arr, next in zip(rows, rows[1:]):
-        # small padding just to get same lenght
-        # this allows us to do pair-distances and determine
-        # if the point row direction is inverted (by checking both directons)
-        max_size = max(len(arr), len(next))
-        pad_arr = np.pad(
-            arr, ((0, max_size - len(arr)), (0, 0)), constant_values=np.nan
-        )
-        pad_next = np.pad(
-            next, ((0, max_size - len(next)), (0, 0)), constant_values=np.nan
-        )
-        pair_dist = np.nansum(np.linalg.norm(pad_arr - pad_next, axis=1))
-        pair_dist_inverted = np.nansum(np.linalg.norm(pad_arr - pad_next[::-1], axis=1))
-        if pair_dist_inverted < pair_dist:
+        start_dist = np.linalg.norm(arr[0] - next[0])
+        end_dist = np.linalg.norm(arr[-1] - next[-1])
+        dist = start_dist + end_dist
+        # now invert direction
+        start_dist_inv = np.linalg.norm(arr[0] - next[-1])
+        end_dist_inv = np.linalg.norm(arr[-1] - next[0])
+        dist_inv = start_dist_inv + end_dist_inv
+        if dist_inv < dist:
             # opposite of previous direction
             directions.append(-directions[-1])
         else:
