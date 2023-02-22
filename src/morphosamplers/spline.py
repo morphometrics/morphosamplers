@@ -1,5 +1,6 @@
 """Tooling to fit and sample splines."""
 
+import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -45,6 +46,8 @@ class NDimensionalSpline(EventedModel):
         points = np.atleast_2d(v)
         if points.ndim != 2:
             raise ValueError("points must be an (n, d) array")
+        if len(points) < 2:
+            raise ValueError("must provide at least 2 points")
         return points
 
     @root_validator(skip_on_failure=True)
@@ -57,7 +60,12 @@ class NDimensionalSpline(EventedModel):
         spline_order: Optional[int] = values.get("order")
 
         if spline_order is not None and n_samples <= spline_order:
-            raise ValueError("number of points must be greater than spline order")
+            new_order = n_samples - 1
+            warnings.warn(
+                f'Too few points for spline of order {spline_order}. '
+                f'Decreasing order to {new_order}'
+            )
+            values['order'] = new_order
 
         return values
 

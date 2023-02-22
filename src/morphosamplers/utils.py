@@ -110,31 +110,53 @@ def minimize_closed_point_strips_pair_distance(strips, expected_dist=None):
     return result
 
 
-def minimize_point_row_pair_distance(rows, mode="crop", expected_dist=None):
+def estimate_point_row_directions(rows):
+    """
+    Guess the directionality of rows of points relative to each other.
+
+    Returns a list of 1 or -1 that can be used as slice steps to index into
+    each row and obtain correctly oriented rows.
+
+    Direction is assumed to need inversion if the extrema of two subsequent rows
+    are closer to each other when swapped.
+    """
+    directions = [1]
+    for arr, next in zip(rows, rows[1:]):
+        start_dist = np.linalg.norm(arr[0] - next[0])
+        end_dist = np.linalg.norm(arr[-1] - next[-1])
+        dist = start_dist + end_dist
+        # now invert direction
+        start_dist_inv = np.linalg.norm(arr[0] - next[-1])
+        end_dist_inv = np.linalg.norm(arr[-1] - next[0])
+        dist_inv = start_dist_inv + end_dist_inv
+        if dist_inv < dist:
+            # opposite of previous direction
+            directions.append(-directions[-1])
+        else:
+            directions.append(directions[-1])
+    return directions
+
+
+def minimize_point_row_pair_distance(rows, expected_dist=None):
     """Minimize average pair distance at the same index between any number of point rows.
 
     Given rows of points lying on curves (row, n, xyz), offsets indices in each row in order
     to minimize the euclidean distance between points with the same index in neighbouring rows.
 
-    Once the optimal offsets are found, rows are padded on both ends so they are all the same length,
-    with either their edge value or nans depending on mode.
+    Once the optimal offsets are found, rows are padded on both ends with nans so they are all the same length.
 
     For example (- is nan, o is a real point, O are points that participated in the minimum distances):
     -OOOo--
     oOOO---
     -OOOooo
     """
-    modes = ("nan", "edge")
-    if mode not in modes:
-        raise ValueError(f"mode must be one of: {modes}")
-
     min_idx = 0
     max_idx = max(len(s) for s in rows)
     offsets = [0]
     # iterate over each row pair
     for arr, next in zip(rows, rows[1:]):
-        # pad with enough nans to be able to offset the rows fully without having them roll over
-        # to the beginning
+        # pad with enough nans to be able to offset the rows fully without
+        # having them roll over to the beginning
         arr_padded = np.pad(
             arr, ((len(next), len(next)), (0, 0)), constant_values=np.nan
         )
@@ -142,21 +164,25 @@ def minimize_point_row_pair_distance(rows, mode="crop", expected_dist=None):
             next, ((0, len(next) + len(arr)), (0, 0)), constant_values=np.nan
         )
         tot_len = len(next) + len(arr) + len(next)
-        best_roll_idx = None
-        best_dist = None
-        # iterate over all possible offset values
+
+        # iterate over all possible offset values,
+        best_roll_idx = 0
+        best_dist = np.inf
         for i in range(tot_len):
             # roll the next row by 1 relative to the previous iteration
             next_rolled = np.roll(next_padded, i, axis=0)
             # calculate distance for each index pair and average it ignoring nans
             roll_dist = np.linalg.norm(arr_padded - next_rolled, axis=1)
             avg_dist = np.nanmean(roll_dist)
+
             if np.isnan(avg_dist):
                 continue
-            if best_dist is None or avg_dist < best_dist:
+
+            if avg_dist < best_dist:
                 # if we got a lower average, save this as the best offset
                 best_dist = avg_dist
                 best_roll_idx = i
+
         if expected_dist is not None and best_dist >= expected_dist * np.sqrt(2):
             warnings.warn('The grid is sheared by more than 1 separation in some places', stacklevel=2)
 
@@ -168,29 +194,25 @@ def minimize_point_row_pair_distance(rows, mode="crop", expected_dist=None):
     # construct final aligned arrays by offsetting each row by the optimal offset and padding
     # everything so that the lengths are all equal
     aligned = []
-    if mode == "edge":
-        pad_kwargs = {"mode": "edge"}
-    elif mode == "nan":
-        pad_kwargs = {"mode": "constant", "constant_values": np.nan}
     min_idx = min(offsets)
     max_idx = max(o + len(a) for o, a in zip(offsets, rows))
     for arr, offset in zip(rows, offsets):
         padded = np.pad(
-            arr, ((offset - min_idx, max_idx - offset - len(arr)), (0, 0)), **pad_kwargs
+            arr, ((offset - min_idx, max_idx - offset - len(arr)), (0, 0)), mode='constant', constant_values=np.nan
         )
         aligned.append(padded)
     return aligned
 
 
-def extrapolate_point_strips_with_direction(strips, directions, separation):
+def extrapolate_point_rows_with_derivatives(strips, derivatives, separation):
     """
-    Extrapolate point strips padded with nans by continuing along a direction.
+    Extrapolate point strips padded with nans by continuing along their derivatives.
 
     Extrapolates beyond the first and last finite value in strip continuing
     in the correct direction and spacing by separation.
     """
     extrapolated = []
-    for strip, dir in zip(strips, directions):
+    for strip, dir in zip(strips, derivatives):
         nans = np.isnan(strip[:, 0])
         left_pad = np.argmax(~nans)
         left_dir = -dir[0]

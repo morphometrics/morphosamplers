@@ -6,15 +6,16 @@ import warnings
 import numpy as np
 import einops
 from psygnal import EventedModel
-from pydantic import PrivateAttr, conint
+from pydantic import PrivateAttr, conint, validator, root_validator
 from scipy.interpolate import splev, splprep
 from scipy.spatial.transform import Rotation
 
 from .spline import Spline3D
 from .utils import (
-    extrapolate_point_strips_with_direction,
+    extrapolate_point_rows_with_derivatives,
     minimize_point_row_pair_distance,
     minimize_closed_point_strips_pair_distance,
+    estimate_point_row_directions,
 )
 
 
@@ -29,11 +30,37 @@ class _SplineSurface(EventedModel):
     inside_point: Optional[Union[np.ndarray, Tuple[float, float, float]]] = None
     _row_splines = PrivateAttr(List[Spline3D])
     _column_splines = PrivateAttr(List[Spline3D])
+    _oversampling_ratio = 10
 
     class Config:
         """Pydantic BaseModel configuration."""
 
         arbitrary_types_allowed = True
+
+    @validator('points')
+    def _validate_number_of_splines(v):
+        points = np.atleast_2d(*v)
+        if len(points) < 2:
+            raise ValueError('At least 2 arrays of points are necessary to define a surface.')
+        return points
+
+    @root_validator(skip_on_failure=True)
+    def _validate_number_of_lines(cls, values):
+        points = values.get('points')
+        n_lines = len(points)
+        order = values.get('order')
+
+        # order needs to be reduced if it does not match the number of splines
+        if order is not None and n_lines <= order:
+            new_order = n_lines - 1
+            warnings.warn(
+                f'Too few arrays of points for interpolation of order {order}. '
+                f'Decreasing order to {new_order} for interpolation between lines.'
+            )
+            # we don't decrease the order here so we can still attempt to use the full
+            # interpolation for individual splines, so we do it in _generate_column_splines
+
+        return values
 
     def __init__(self, **kwargs):
         """Calculate the splines after validating the paramters."""
@@ -49,7 +76,8 @@ class _SplineSurface(EventedModel):
         self._generate_row_splines()
         self._generate_column_splines()
 
-    def _fix_spline_edges(self, splines, separation, order):
+    @classmethod
+    def _fix_spline_edges(cls, splines, separation, order, closed):
         """
         Generate new control points for each spline to ensure a minimally deformed grid.
 
@@ -65,12 +93,13 @@ class _SplineSurface(EventedModel):
         shear by minimising the mean distance between samples at the same intex in neighboring rows.
         """
         # sample splines to get equidistant points on z slices
+        separation = separation / cls._oversampling_ratio
         us = [
             spline._get_equidistant_spline_coordinate_values(separation=separation, approximate=True)
             for spline in splines
         ]
 
-        if self.closed:
+        if closed:
             # We need the same amount of samples on each row to make a rectangular grid,
             # but we can't extend/pad a closed surface, so instead we take n_samples from each
             # so that on average we get a good approximation of the given separation
@@ -87,17 +116,24 @@ class _SplineSurface(EventedModel):
             masks = [np.ones(len(p), dtype=bool) for p in points]
         else:
             points = [spline.sample(u) for spline, u in zip(splines, us)]
-            directions = [
+            derivatives = [
                 spline.sample(u, derivative_order=1)
                 for spline, u in zip(splines, us)
             ]
 
+            # flip directions of annotations if necessary
+            directions = estimate_point_row_directions(points)
+            # coordinates can be simply inverted
+            points = [pts[::dir] for pts, dir in zip(points, directions)]
+            # directions need to be inverted *and* flipped (since they are a vector)
+            derivatives = [der[::dir] * dir for der, dir in zip(derivatives, directions)]
+
             # extrapolate where nans are present by extending along the spline direction
-            points = minimize_point_row_pair_distance(points, expected_dist=separation, mode="nan")
+            points = minimize_point_row_pair_distance(points, expected_dist=separation)
 
             masks = [~np.isnan(p[:, 0]) for p in points]  # just one dim is enough
-            points = extrapolate_point_strips_with_direction(
-                points, directions, separation
+            points = extrapolate_point_rows_with_derivatives(
+                points, derivatives, separation
             )
 
         return points, masks
@@ -110,19 +146,29 @@ class _SplineSurface(EventedModel):
 
     def _generate_column_splines(self):
         # fix edge artifacts by extending splines until we have a grid
-        control_points, masks = self._fix_spline_edges(self._row_splines, self.separation, self.order)
+        control_points, masks = self._fix_spline_edges(self._row_splines, self.separation, self.order, self.closed)
 
         if self.closed:
             # _fix_spline_edges returns strips including the extrema, so we need to remove
             # one of them if the surface is closed to avoid duplication
             control_points = [p[:-1] for p in control_points]
 
+        # _fix_spline_edges oversamples to avoid artifacts, so we only take every N points
+        control_points = np.stack(control_points)[:, ::self._oversampling_ratio]
+        masks = np.stack(masks)[:, ::self._oversampling_ratio]
+
         # stack points in the other direction, so we get the column-splines
         stacked = einops.rearrange(control_points, 'row column xyz -> column row xyz')
         masks_stacked = einops.rearrange(masks, 'row column -> column row')
 
+        # order needs to be reduced if it does not match the number of splines
+        if len(self.points) <= self.order:
+            order = len(self.points) - 1
+        else:
+            order = self.order
+
         self._column_splines = [
-            Spline3D(points=p, order=self.order, smoothing=self.smoothing, mask=mask)
+            Spline3D(points=p, order=order, smoothing=self.smoothing, mask=mask)
             for p, mask in zip(stacked, masks_stacked)
         ]
 
@@ -226,7 +272,13 @@ class GriddedSplineSurface(_SplineSurface):
         z = np.cross(x, y)
         z /= np.linalg.norm(z, axis=1, keepdims=True)
 
-        rots = Rotation.from_matrix(np.stack([x, y, z], axis=-1))
+        # since x and y are not guaranteed to be orthogonal, we re-generate y to get
+        # perfectly orthogonal so we end up with determinant == 1
+        x = np.cross(y, z)
+        x /= np.linalg.norm(x, axis=1, keepdims=True)
+
+        mat = np.stack([x, y, z], axis=-1)
+        rots = Rotation.from_matrix(mat)
 
         if self.inside_point is not None:
             # use the inside point to put normal in correct direction
