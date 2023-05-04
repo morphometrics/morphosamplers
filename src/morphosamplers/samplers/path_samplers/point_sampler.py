@@ -23,7 +23,7 @@ class PointSampler(MorphoSampler):
     @staticmethod
     def prepare_spline(
         path: Path, n_initial_samples: int = 10_000
-    ) -> Tuple[Tuple[...], float]:
+    ) -> Tuple[Tuple[np.ndarray], float]:
         # oversample an initial spline between control points
         points = einops.rearrange(path.control_points, 'b xyz -> xyz b')
         u = np.linspace(0, 1, num=n_initial_samples)
