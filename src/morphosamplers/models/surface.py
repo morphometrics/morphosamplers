@@ -1,3 +1,5 @@
+from typing import List
+
 import numpy as np
 from pydantic import validator
 
@@ -6,7 +8,7 @@ from morphosamplers.core import MorphoModel
 
 class Surface(MorphoModel):
     """A 3D surface defined by control points in a series of levels."""
-    control_points: list[np.ndarray]
+    control_points: List[np.ndarray]
 
     @validator('control_points')
     def check_at_least_two_points(cls, value):
