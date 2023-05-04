@@ -29,7 +29,7 @@ helical_poses = helical_pose_sampler.sample(path)  # poses related by 'twist' de
 ### visualise
 viewer = napari.Viewer(ndisplay=3)
 
-# just positions
+# positions
 viewer.add_points(positions, size=5)
 
 # parallel poses
@@ -52,7 +52,7 @@ viewer.add_vectors(
     name='parallel pose y',
 )
 
-# parallel poses
+# helical poses
 viewer.add_vectors(
     data=np.stack(
         [helical_poses.positions, helical_poses.orientations[:, :, 2]],
