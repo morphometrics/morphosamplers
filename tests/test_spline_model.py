@@ -137,7 +137,7 @@ def test_spline_orientations():
     spline = Spline3D(points=points, order=3)
     pt = spline.sample(u=0)
     # lower atol, as it's very strict by default, much more than np.allclose
-    np.testing.assert_allclose(pt, 0, atol=1e-20)
+    np.testing.assert_allclose(pt, 0, atol=1e-8)
     ori = spline.sample_orientations(u=0)
     np.testing.assert_allclose(ori.apply([0, 0, 1]), [[0, 0, 1]])
 
