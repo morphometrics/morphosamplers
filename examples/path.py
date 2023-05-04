@@ -1,17 +1,14 @@
 import numpy as np
 import napari
-from scipy.spatial.transform import Rotation as R
 
-from morphosamplers.models import MorphoModels
-from morphosamplers.samplers import path_samplers
+from morphosamplers import Path, path_samplers
 
 # create some control points for a path
 xyz = np.linspace([0, 0, 0], [0, 0, 200], num=10)
 xyz[:, :2] += np.random.normal(loc=0, scale=10, size=(10, 2))
 
 # make a Path model from these control points
-path = MorphoModels.Path(control_points=xyz)
-
+path = Path(control_points=xyz)
 
 ### create different types of samplers and use them to sample the path
 # points

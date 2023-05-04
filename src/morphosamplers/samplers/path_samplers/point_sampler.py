@@ -2,15 +2,15 @@ import einops
 import numpy as np
 from scipy.interpolate import splprep, splev
 
+from morphosamplers import Path
 from morphosamplers.core import MorphoSampler
-from morphosamplers.models import MorphoModels
 from morphosamplers.sample_types import Points
 
 
 class PointSampler(MorphoSampler):
     spacing: float
 
-    def sample(self, obj: MorphoModels.Path) -> Points:
+    def sample(self, obj: Path) -> Points:
         """Sample a `Path` to produces an `(n, 3)` array of points."""
         tck, total_length = self.prepare_spline(obj)
         n_samples = total_length // self.spacing
@@ -20,7 +20,7 @@ class PointSampler(MorphoSampler):
 
     @staticmethod
     def prepare_spline(
-        path: MorphoModels.Path, n_initial_samples: int = 10_000
+        path: Path, n_initial_samples: int = 10_000
     ) -> tuple[tuple[...], float]:
         # oversample an initial spline between control points
         points = einops.rearrange(path.control_points, 'b xyz -> xyz b')

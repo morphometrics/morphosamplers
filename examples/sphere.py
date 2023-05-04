@@ -1,7 +1,7 @@
 import napari
 import numpy as np
 
-from morphosamplers import MorphoModels, sphere_samplers
+from morphosamplers import Sphere, sphere_samplers
 
 # create a sphere model
 sphere = MorphoModels.Sphere(center=(5, 5, 5), radius=20)

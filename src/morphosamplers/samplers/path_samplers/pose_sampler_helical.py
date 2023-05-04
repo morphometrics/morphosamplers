@@ -2,7 +2,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from morphosamplers.core import MorphoSampler
-from morphosamplers.models import MorphoModels
+from morphosamplers.models import Path
 from morphosamplers.sample_types import PoseSet
 
 from .pose_sampler_parallel import PoseSampler
@@ -19,8 +19,7 @@ class HelicalPoseSampler(MorphoSampler):
     spacing: float  # spacing between positions
     twist: float  # helical twist per subunit in degrees
 
-
-    def sample(self, obj: MorphoModels.Path) -> PoseSet:
+    def sample(self, obj: Path) -> PoseSet:
         # get parallel poses along filament axis
         sampler = PoseSampler(spacing=self.spacing)
         poses = sampler.sample(obj)

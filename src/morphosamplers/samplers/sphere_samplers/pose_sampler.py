@@ -2,7 +2,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from morphosamplers.core import MorphoSampler
-from morphosamplers import MorphoModels
+from morphosamplers import Sphere
 from morphosamplers.sample_types import PoseSet
 from morphosamplers.samplers.sphere_samplers.point_sampler import PointSampler
 
@@ -11,7 +11,7 @@ class PoseSampler(MorphoSampler):
     """Sample poses packed on the surface of a sphere with a defined spacing."""
     spacing: float
 
-    def sample(self, obj: MorphoModels.Sphere) -> PoseSet:
+    def sample(self, obj: Sphere) -> PoseSet:
         # get equally spaced points on surface
         point_sampler = PointSampler(spacing=self.spacing)
         positions = point_sampler.sample(obj)

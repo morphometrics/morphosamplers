@@ -3,7 +3,7 @@ import numpy as np
 from scipy.interpolate import splev
 from scipy.spatial.transform import Rotation, Slerp
 
-from morphosamplers import MorphoModels
+from morphosamplers import Path
 from morphosamplers.core import MorphoSampler
 from morphosamplers.sample_types import PoseSet
 from morphosamplers.utils import coaxial_y_vectors_from_z_vectors
@@ -12,7 +12,7 @@ from morphosamplers.utils import coaxial_y_vectors_from_z_vectors
 class PoseSampler(MorphoSampler):
     spacing: float
 
-    def sample(self, obj: MorphoModels.Path) -> PoseSet:
+    def sample(self, obj: Path) -> PoseSet:
         """Sample a `Path` to produces a `PoseSet`.
 
         The positions in the `PoseSet` are equidistant points sampled according to
