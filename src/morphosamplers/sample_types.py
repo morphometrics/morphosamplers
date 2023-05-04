@@ -1,6 +1,7 @@
 import numpy as np
 from pydantic import BaseModel, root_validator, validator
-from typing import TypeAlias, Union
+from typing import Union
+from typing_extensions import TypeAlias
 
 Image: TypeAlias = np.ndarray
 Mask: TypeAlias = np.ndarray
