@@ -29,6 +29,7 @@ dependencies = [
     "psygnal",
     "pydantic",
     "scipy",
+    "typing-extensions"
 ]
 
 # extras

@@ -8,3 +8,6 @@ except PackageNotFoundError:
     __version__ = "uninstalled"
 __author__ = "Kevin Yamauchi"
 __email__ = "kevin.yamauchi@gmail.com"
+
+from morphosamplers.models import Path, Sphere, Surface
+from morphosamplers.samplers import path_samplers, sphere_samplers
