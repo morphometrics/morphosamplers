@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import einops
 import numpy as np
 from scipy.interpolate import splprep, splev
@@ -21,7 +23,7 @@ class PointSampler(MorphoSampler):
     @staticmethod
     def prepare_spline(
         path: Path, n_initial_samples: int = 10_000
-    ) -> tuple[tuple[...], float]:
+    ) -> Tuple[Tuple[...], float]:
         # oversample an initial spline between control points
         points = einops.rearrange(path.control_points, 'b xyz -> xyz b')
         u = np.linspace(0, 1, num=n_initial_samples)
