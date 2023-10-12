@@ -21,7 +21,7 @@ def _project_vector_onto_plane(vector, plane_normal):
     return proj_plane
 
 
-def calculate_y_vectors_from_z_vectors(
+def coaxial_y_vectors_from_z_vectors(
     z: np.ndarray,
     initial_y_vector: Union[np.ndarray, Tuple[float, float, float]] = (0.3234, 0.6543, 0.978),
 ) -> np.ndarray:
@@ -53,7 +53,7 @@ def calculate_y_vectors_from_z_vectors(
     if np.dot(initial_y_vector, z[0]) == 1:
         raise ValueError('cannot generate y vectors because the provided initial_y_vector '
                          'and the first z vector are perfectly aligned.')
-    # normalise initial y vector so that dot product is the projection
+    # normalise initial y vector so that the subsequent dot product is a projection
     initial_y_vector = initial_y_vector / np.linalg.norm(initial_y_vector)
 
     # initialise first y
