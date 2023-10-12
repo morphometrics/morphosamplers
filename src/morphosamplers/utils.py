@@ -1,7 +1,7 @@
 """Utility functions."""
 
-from typing import Tuple, Union
 import warnings
+from typing import Tuple, Union
 
 import numpy as np
 from scipy.spatial import KDTree
@@ -23,7 +23,11 @@ def _project_vector_onto_plane(vector, plane_normal):
 
 def calculate_y_vectors_from_z_vectors(
     z: np.ndarray,
-    initial_y_vector: Union[np.ndarray, Tuple[float, float, float]] = (0.3234, 0.6543, 0.978),
+    initial_y_vector: Union[np.ndarray, Tuple[float, float, float]] = (
+        0.3234,
+        0.6543,
+        0.978,
+    ),
 ) -> np.ndarray:
     """Calculate y vectors starting from z vectors.
 
@@ -51,8 +55,10 @@ def calculate_y_vectors_from_z_vectors(
     y = np.empty((len(z), 3))
 
     if np.dot(initial_y_vector, z[0]) == 1:
-        raise ValueError('cannot generate y vectors because the provided initial_y_vector '
-                         'and the first z vector are perfectly aligned.')
+        raise ValueError(
+            "cannot generate y vectors because the provided initial_y_vector "
+            "and the first z vector are perfectly aligned."
+        )
     # normalise initial y vector so that dot product is the projection
     initial_y_vector = initial_y_vector / np.linalg.norm(initial_y_vector)
 
@@ -91,7 +97,7 @@ def deduplicate_points(coords: np.ndarray, exclusion_radius: float) -> np.ndarra
     return coords
 
 
-def minimize_closed_point_strips_pair_distance(strips, expected_dist=None):
+def minimize_closed_point_row_pair_distance(strips, expected_dist=None):
     # assume closed, circular strips with equal length
     result = [strips[0]]
     ln = len(strips[0])
@@ -105,7 +111,10 @@ def minimize_closed_point_strips_pair_distance(strips, expected_dist=None):
                 best_dist = avg_dist
                 best_arr = next_rolled
         if expected_dist is not None and best_dist >= expected_dist * np.sqrt(2):
-            warnings.warn('The grid is sheared by more than 1 separation in some places', stacklevel=2)
+            warnings.warn(
+                "The grid is sheared by more than 1 separation in some places",
+                stacklevel=2,
+            )
         result.append(best_arr)
     return result
 
@@ -184,7 +193,10 @@ def minimize_point_row_pair_distance(rows, expected_dist=None):
                 best_roll_idx = i
 
         if expected_dist is not None and best_dist >= expected_dist * np.sqrt(2):
-            warnings.warn('The grid is sheared by more than 1 separation in some places', stacklevel=2)
+            warnings.warn(
+                "The grid is sheared by more than 1 separation in some places",
+                stacklevel=2,
+            )
 
         # we have the offset that minimises distances
         offset = best_roll_idx - len(next)
@@ -198,7 +210,10 @@ def minimize_point_row_pair_distance(rows, expected_dist=None):
     max_idx = max(o + len(a) for o, a in zip(offsets, rows))
     for arr, offset in zip(rows, offsets):
         padded = np.pad(
-            arr, ((offset - min_idx, max_idx - offset - len(arr)), (0, 0)), mode='constant', constant_values=np.nan
+            arr,
+            ((offset - min_idx, max_idx - offset - len(arr)), (0, 0)),
+            mode="constant",
+            constant_values=np.nan,
         )
         aligned.append(padded)
     return aligned
