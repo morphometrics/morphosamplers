@@ -6,7 +6,7 @@ from .spline import Spline3D
 
 class HelicalFilament(Spline3D):
 
-    def sample_helical(self, rise, twist=0, radius=0, cyclic_symmetry_order=1, twist_offset=0, degrees=True):
+    def sample_helical(self, rise, twist=0, radial_offset=0, cyclic_symmetry_order=1, twist_offset=0, degrees=True):
         positions = []
         orientations = []
         base_positions = self.sample(separation=rise)
@@ -14,7 +14,7 @@ class HelicalFilament(Spline3D):
 
         # twist around the z acis by the given angle
         twist_angles = twist_offset + (np.arange(len(base_positions)) * twist)
-        Rz = Rotation.from_euler('z', angles=twist_angles, degrees=True)
+        Rz = Rotation.from_euler('z', angles=twist_angles, degrees=degrees)
         base_orientations *= Rz
 
         # create symmetry duplicates around the axis of the filament
@@ -26,7 +26,7 @@ class HelicalFilament(Spline3D):
             # shift all particles away from the filament axis by self.radius
             # direction of shift is determined by the twist of the particle (along its y axis)
             y = ori.as_matrix()[..., 1]
-            pos = base_positions + y * radius
+            pos = base_positions + y * radial_offset
             positions.append(pos)
             orientations.append(ori)
 
