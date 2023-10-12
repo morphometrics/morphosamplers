@@ -340,27 +340,15 @@ class GriddedSplineSurface(_SplineSurface):
             column_range = np.append(column_range, 0)
 
         # first half of triangles
-        first_index = np.repeat(row_range[:-1], columns - 1) * (
-            columns - shift
-        ) + np.tile(column_range[:-1], rows - 1)
-        second_index = np.repeat(row_range[1:], columns - 1) * (
-            columns - shift
-        ) + np.tile(column_range[:-1], rows - 1)
-        third_index = np.repeat(row_range[:-1], columns - 1) * (
-            columns - shift
-        ) + np.tile(column_range[1:], rows - 1)
+        first_index = np.repeat(row_range[:-1], columns - 1) * (columns - shift) + np.tile(column_range[:-1], rows - 1)
+        second_index = np.repeat(row_range[1:], columns - 1) * (columns - shift) + np.tile(column_range[:-1], rows - 1)
+        third_index = np.repeat(row_range[:-1], columns - 1) * (columns - shift) + np.tile(column_range[1:], rows - 1)
         triangles_1 = np.stack([first_index, second_index, third_index], axis=1)
 
         # second half
-        first_index = np.repeat(row_range[1:], columns - 1) * (
-            columns - shift
-        ) + np.tile(column_range[:-1], rows - 1)
-        second_index = np.repeat(row_range[1:], columns - 1) * (
-            columns - shift
-        ) + np.tile(column_range[1:], rows - 1)
-        third_index = np.repeat(row_range[:-1], columns - 1) * (
-            columns - shift
-        ) + np.tile(column_range[1:], rows - 1)
+        first_index = np.repeat(row_range[1:], columns - 1) * (columns - shift) + np.tile(column_range[:-1], rows - 1)
+        second_index = np.repeat(row_range[1:], columns - 1) * (columns - shift) + np.tile(column_range[1:], rows - 1)
+        third_index = np.repeat(row_range[:-1], columns - 1) * (columns - shift) + np.tile(column_range[1:], rows - 1)
         triangles_2 = np.stack([first_index, second_index, third_index], axis=1)
 
         all_triangles = np.concatenate([triangles_1, triangles_2])

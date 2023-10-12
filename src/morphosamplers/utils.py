@@ -21,7 +21,7 @@ def _project_vector_onto_plane(vector, plane_normal):
     return proj_plane
 
 
-def calculate_y_vectors_from_z_vectors(
+def coaxial_y_vectors_from_z_vectors(
     z: np.ndarray,
     initial_y_vector: Union[np.ndarray, Tuple[float, float, float]] = (
         0.3234,

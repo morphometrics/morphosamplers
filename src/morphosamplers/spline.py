@@ -9,7 +9,7 @@ from pydantic import PrivateAttr, conint, root_validator, validator
 from scipy.interpolate import splev, splprep
 from scipy.spatial.transform import Rotation, Slerp
 
-from .utils import calculate_y_vectors_from_z_vectors, within_range, get_mask_limits
+from .utils import coaxial_y_vectors_from_z_vectors, within_range, get_mask_limits
 
 
 class NDimensionalSpline(EventedModel):
@@ -247,16 +247,16 @@ class Spline3D(NDimensionalSpline):
         self._prepare_orientation_sampler()
 
     def _prepare_orientation_sampler(self):
-        """Prepare a sampler yielding smoothly varying orientations along the spline.
+        """Prepare a pose_sampler yielding smoothly varying orientations along the spline.
 
         This method constructs a set of rotation matrices which vary smoothly with
-        the spline coordinate `u`. A sampler is then prepared which can be queried at
+        the spline coordinate `u`. A pose_sampler is then prepared which can be queried at
         any point(s) along the spline coordinate `u` and the resulting rotations vary
         smoothly along the spline
         """
         u = np.linspace(0, 1, num=self._n_spline_samples)
         z = self._sample_spline_z(u)
-        y = calculate_y_vectors_from_z_vectors(z)
+        y = coaxial_y_vectors_from_z_vectors(z)
         x = np.cross(y, z)
         r = Rotation.from_matrix(np.stack([x, y, z], axis=-1))
         self._rotation_sampler = Slerp(u, r)
