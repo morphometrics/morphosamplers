@@ -251,7 +251,7 @@ class GriddedSplineSurface(_SplineSurface):
         begins_interp = interp1d(mean_raw_u, mask_begins)(u).round().astype(int)
         ends_interp = interp1d(mean_raw_u, mask_ends)(u).round().astype(int)
 
-        grid_mask = np.zeros((len(self._column_splines), len(u)), dtype=bool)
+        grid_mask = np.zeros((len(u), len(self._column_splines)), dtype=bool)
         for i, (b, e) in enumerate(zip(begins_interp, ends_interp)):
             grid_mask[i, b:e] = True
 
@@ -428,7 +428,7 @@ class HexSplineSurface(_SplineSurface):
         begins_interp = interp1d(mean_raw_u, mask_begins)(us[1]).round().astype(int)
         ends_interp = interp1d(mean_raw_u, mask_ends)(us[1]).round().astype(int)
 
-        grid_mask = np.zeros((len(self._column_splines), len(us[1])), dtype=bool)
+        grid_mask = np.zeros((len(us[1]), len(self._column_splines)), dtype=bool)
         for i, (b, e) in enumerate(zip(begins_interp, ends_interp)):
             grid_mask[i, b:e] = True
 
