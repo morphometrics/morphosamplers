@@ -7,7 +7,7 @@ import einops
 import numpy as np
 from psygnal import EventedModel
 from pydantic import PrivateAttr, conint, root_validator, validator
-from scipy.interpolate import splev, splprep
+from scipy.interpolate import splev, splprep, interp1d
 from scipy.spatial.transform import Rotation
 
 from .spline import Spline3D
@@ -29,6 +29,7 @@ class _SplineSurface(EventedModel):
     closed: bool = False
     inside_point: Optional[Union[np.ndarray, Tuple[float, float, float]]] = None
     oversampling: int = 2
+    _raw_masks = PrivateAttr(np.ndarray)
     _row_splines = PrivateAttr(List[Spline3D])
     _column_splines = PrivateAttr(List[Spline3D])
 
@@ -155,6 +156,11 @@ class _SplineSurface(EventedModel):
             for p in self.points
         ]
 
+    def _sample_rows(self, u=None):
+        """Useful for debugging."""
+        u = np.linspace(0, 1, 10) if u is None else u
+        return [spline.sample(u=u) for spline in self._row_splines]
+
     def _generate_column_splines(self):
         # fix edge artifacts by extending splines until we have a grid
         control_points, masks = self._fix_spline_edges(
@@ -172,11 +178,10 @@ class _SplineSurface(EventedModel):
 
         # _fix_spline_edges oversamples to avoid artifacts, so we only take every N points
         control_points = np.stack(control_points)[:, ::self.oversampling]
-        masks = np.stack(masks)[:, ::self.oversampling]
+        self._raw_masks = np.stack(masks)[:, ::self.oversampling]
 
         # stack points in the other direction, so we get the column-splines
         stacked = einops.rearrange(control_points, "row column xyz -> column row xyz")
-        masks_stacked = einops.rearrange(masks, "row column -> column row")
 
         # order needs to be reduced if it does not match the number of splines
         if len(self.points) <= self.order:
@@ -185,9 +190,14 @@ class _SplineSurface(EventedModel):
             order = self.order
 
         self._column_splines = [
-            Spline3D(points=p, order=order, smoothing=self.smoothing, mask=mask)
-            for p, mask in zip(stacked, masks_stacked)
+            Spline3D(points=pts, order=order, smoothing=self.smoothing)
+            for pts in stacked
         ]
+
+    def _sample_columns(self, u=None):
+        """Useful for debugging."""
+        u = np.linspace(0, 1, 10) if u is None else u
+        return [spline.sample(u=u) for spline in self._column_splines]
 
 
 class GriddedSplineSurface(_SplineSurface):
@@ -225,14 +235,27 @@ class GriddedSplineSurface(_SplineSurface):
                 "the surface in quasi-planar patches."
             )
         best_n = int(round(np.mean(n_points)))
-        u = np.linspace(0, 1, best_n)
+        u = np.linspace(0, 1, best_n)[::self.oversampling]
         # TODO: actually use non-approximate linspace (with remainder) so we get as close as possible to
         #       a real grid. The problem with this is that we won't reach exactly the last spline
 
-        equidistant_points = [spline.sample(u)[::self.oversampling] for spline in self._column_splines]
-        masks = [spline.get_mask_for_u(u)[::self.oversampling] for spline in self._column_splines]
+        equidistant_points = [spline.sample(u) for spline in self._column_splines]
 
-        self._mask = np.concatenate(np.stack(masks, axis=1))
+        # interpolate where masks begin and end for each new row, so we get a nice
+        # slope between each annotation.
+        # TODO: would be great to do this without the mean_u, but it seems impossible
+        mean_raw_u = np.mean([s._raw_u for s in self._column_splines], axis=0)
+        mask_begins = np.argmax(self._raw_masks, axis=1)
+        mask_ends = len(self._column_splines) - np.argmax(self._raw_masks[:, ::-1], axis=1)
+
+        begins_interp = interp1d(mean_raw_u, mask_begins)(u).round().astype(int)
+        ends_interp = interp1d(mean_raw_u, mask_ends)(u).round().astype(int)
+
+        grid_mask = np.zeros((len(self._column_splines), len(u)), dtype=bool)
+        for i, (b, e) in enumerate(zip(begins_interp, ends_interp)):
+            grid_mask[i, b:e] = True
+
+        self._mask = grid_mask.ravel()
 
         # these last splines should not be oversampled, because we want exact
         # positions for our knots, which we save in self._meta_meta_splines_u
@@ -384,21 +407,34 @@ class HexSplineSurface(_SplineSurface):
         us = []
         for i, spline in enumerate(self._column_splines):
             if i % 2:
-                us.append(np.linspace(0, 1, best_n))
+                us.append(np.linspace(0, 1, best_n)[::self.oversampling])
             else:
+                # need to account for specific offset given the euclidean length of each spline
+                # in order to get a nice grid
                 offset = self.separation / spline._length / 2
-                us.append(np.linspace(offset, 1 - offset, best_n - 1))
+                us.append(np.linspace(offset, 1 - offset, best_n - 1)[::self.oversampling])
 
         equidistant_points = [
-            spline.sample(u)[::self.oversampling] for spline, u in zip(self._column_splines, us)
+            spline.sample(u) for spline, u in zip(self._column_splines, us)
         ]
 
-        masks = [
-            spline.get_mask_for_u(u)[::self.oversampling] for spline, u in zip(self._column_splines, us)
-        ]
-        masks_even = np.concatenate(np.stack(masks[::2], axis=1))
-        masks_odd = np.concatenate(np.stack(masks[1::2], axis=1))
-        self._mask = np.concatenate([masks_even, masks_odd])
+        # interpolate where masks begin and end for each new row, so we get a nice
+        # slope between each annotation.
+        # TODO: would be great to do this without the mean_u, but it seems impossible
+        mean_raw_u = np.mean([s._raw_u for s in self._column_splines], axis=0)
+        mask_begins = np.argmax(self._raw_masks, axis=1)
+        mask_ends = len(self._column_splines) - np.argmax(self._raw_masks[:, ::-1], axis=1)
+
+        begins_interp = interp1d(mean_raw_u, mask_begins)(us[1]).round().astype(int)
+        ends_interp = interp1d(mean_raw_u, mask_ends)(us[1]).round().astype(int)
+
+        grid_mask = np.zeros((len(self._column_splines), len(us[1])), dtype=bool)
+        for i, (b, e) in enumerate(zip(begins_interp, ends_interp)):
+            grid_mask[i, b:e] = True
+
+        grid_mask_even = grid_mask[:-1, ::2]
+        grid_mask_odd = grid_mask[:, 1::2]
+        self._mask = np.concatenate([grid_mask_even.ravel(), grid_mask_odd.ravel()])
 
         # alternate each row spline to have points on same level
         splines_even = []
