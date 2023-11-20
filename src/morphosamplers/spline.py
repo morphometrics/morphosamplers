@@ -22,6 +22,7 @@ class NDimensionalSpline(EventedModel):
     closed: bool = False
     _n_spline_samples: int = PrivateAttr(10000)
     _tck = PrivateAttr(Tuple)
+    _raw_u = PrivateAttr(np.ndarray)
     _u_mask_limits: List[Tuple[float, float]] = PrivateAttr([])
     _length = PrivateAttr(float)
 
@@ -89,7 +90,7 @@ class NDimensionalSpline(EventedModel):
         else:
             points = self.points
 
-        tck, raw_u = splprep(points.T, s=0, k=self.order, per=self.closed)
+        tck, self._raw_u = splprep(points.T, s=0, k=self.order, per=self.closed)
         samples = np.stack(splev(u, tck), axis=1)
 
         # calculate the cumulative length of line segments
@@ -107,7 +108,7 @@ class NDimensionalSpline(EventedModel):
             limits = get_mask_limits(self.mask)
             u_ranges = []
             for low_idx, high_idx in limits:
-                u_low, u_high = raw_u[[low_idx, high_idx]]
+                u_low, u_high = self._raw_u[[low_idx, high_idx]]
                 u_ranges.append((u_low, u_high))
             self._u_mask_limits = u_ranges
 
