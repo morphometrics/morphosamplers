@@ -129,7 +129,7 @@ def place_sampling_grids(
 
 
 def sample_volume_at_coordinates(
-    volume: np.ndarray, coordinates: np.ndarray, interpolation_order: int = 3
+    volume: np.ndarray, coordinates: np.ndarray, interpolation_order: int = 3, fill_value=np.nan,
 ) -> np.ndarray:
     """
     Sample a volume with spline interpolation at specific coordinates.
@@ -147,6 +147,8 @@ def sample_volume_at_coordinates(
         should be (batch, *grid_shape, 3) to allow reshaping back correctly
     interpolation_order : int
         Spline order for image interpolation.
+    fill_value : float
+        Value to fill in for sample coordinates past the edges of the volume.
 
     Returns
     -------
@@ -156,7 +158,7 @@ def sample_volume_at_coordinates(
     batch, *grid_shape, _ = coordinates.shape
     # map_coordinates wants transposed coordinate array
     sampled_volume = map_coordinates(
-        volume, coordinates.reshape(-1, 3).T, order=interpolation_order
+        volume, coordinates.reshape(-1, 3).T, order=interpolation_order, cval=fill_value,
     )
     # reshape back (need to invert due to previous transposition)
     sampled_volume = sampled_volume.reshape(*grid_shape, batch)
