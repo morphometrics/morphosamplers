@@ -13,6 +13,7 @@ def subsample_inclusive(lst, sampling_step=10):
     subsampled = list(lst[::sampling_step])
 
     if len(lst) % sampling_step:
+        subsampled.pop(-1)
         subsampled.append(lst[-1])
     return subsampled
 

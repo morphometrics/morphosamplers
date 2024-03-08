@@ -219,33 +219,24 @@ def minimize_point_row_pair_distance(rows, expected_dist=None):
     return aligned
 
 
-def extrapolate_point_rows_with_derivatives(strips, derivatives, separation):
-    """
-    Extrapolate point strips padded with nans by continuing along their derivatives.
+def extrapolate_once(strips):
+    strips = strips.copy()
+    for strip in strips:
+        for direction in (-1, 1):
+            strip = strip[::-1]
+            nans = np.isnan(strip[:, 0])
+            first_finite = np.argmax(~nans)
+            if first_finite not in (0, len(strip) - 1):
+                strip[first_finite - 1] = strip[first_finite] + (strip[first_finite] - strip[first_finite + 1])
+    return strips
 
-    Extrapolates beyond the first and last finite value in strip continuing
-    in the correct direction and spacing by separation.
-    """
-    extrapolated = []
-    for strip, dir in zip(strips, derivatives):
-        nans = np.isnan(strip[:, 0])
-        left_pad = np.argmax(~nans)
-        left_dir = -dir[0]
-        left_shift = left_dir / np.linalg.norm(left_dir) * separation
-        right_pad = np.argmax(~nans[::-1])
-        right_dir = dir[-1]
-        right_shift = right_dir / np.linalg.norm(right_dir) * separation
-        left_extension = strip[left_pad] + left_shift * np.arange(
-            left_pad, 0, -1
-        ).reshape(-1, 1)
-        right_extension = strip[-right_pad - 1] + right_shift * np.arange(
-            1, right_pad + 1
-        ).reshape(-1, 1)
-        padded = np.concatenate(
-            [left_extension, strip[left_pad : -right_pad or None], right_extension]
-        )
-        extrapolated.append(padded)
-    return extrapolated
+
+def extrapolate_point_rows(strips):
+    while np.any(np.isnan(strips)):
+        extended_row = extrapolate_once(strips)
+        extended_col = extrapolate_once(strips.swapaxes(0, 1)).swapaxes(0, 1)
+        strips = np.nanmean([extended_row, extended_col], axis=0)
+    return strips
 
 
 def within_range(arr, low, high, atol=1e-15):
