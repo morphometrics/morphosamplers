@@ -95,7 +95,7 @@ def get_label_paths_2d(slice_label: np.ndarray, sampling_step=10):
     return [pd.DataFrame(path).drop_duplicates().to_numpy() for path in connected]
 
 
-def get_label_paths_3d(labels_data, axis=0, slicing_step=5, sampling_step=5):
+def get_label_paths_3d(labels_data, axis=0, slicing_step=20, sampling_step=20):
     """Extract linear paths for surface generation from a 3D segmentation""" 
     connected_components, n_components = morphology.label(labels_data, return_num=True)
 
@@ -103,7 +103,7 @@ def get_label_paths_3d(labels_data, axis=0, slicing_step=5, sampling_step=5):
     # different disconnected labels are processed separately
     for i in range(n_components):
         label = connected_components == i + 1
-        paths = [sample_2D_slice(sl, sampling_step) for sl in subsample_inclusive(label, slicing_step)]
+        paths = [get_label_paths_2d(sl, sampling_step) for sl in subsample_inclusive(label, slicing_step)]
         padded = []
         for i, p in enumerate(paths):
             if p:
