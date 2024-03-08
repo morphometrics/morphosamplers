@@ -35,6 +35,12 @@ dependencies = [
 # extras
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
+segment = [
+    "skan",
+    "scikit-image",
+    "dijkstra3d",
+    "pandas",
+]
 test = [
     "pytest>=6.0",
     "pytest-cov",

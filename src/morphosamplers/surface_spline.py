@@ -199,6 +199,12 @@ class _SplineSurface(EventedModel):
         u = np.linspace(0, 1, 10) if u is None else u
         return [spline.sample(u=u) for spline in self._column_splines]
 
+    @classmethod
+    def from_segmentation(cls, segmentation: np.ndarray, **kwargs):
+        from .preprocess import get_label_paths_3d
+        component_points = get_label_paths_3d(segmentation)
+        return [cls(points=points, **kwargs) for points in component_points]
+
 
 class GriddedSplineSurface(_SplineSurface):
     """Surface model defined by a regular grid of splines."""
