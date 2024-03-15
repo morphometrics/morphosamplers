@@ -13,7 +13,7 @@ from scipy.spatial.transform import Rotation
 from .spline import Spline3D
 from .utils import (
     estimate_point_row_directions,
-    extrapolate_point_rows_with_derivatives,
+    extrapolate_point_rows,
     minimize_closed_point_row_pair_distance,
     minimize_point_row_pair_distance,
 )
@@ -125,25 +125,18 @@ class _SplineSurface(EventedModel):
             masks = [np.ones(len(p), dtype=bool) for p in points]
         else:
             points = [spline.sample(u) for spline, u in zip(splines, us)]
-            derivatives = [
-                spline.sample(u, derivative_order=1) for spline, u in zip(splines, us)
-            ]
 
             # flip directions of annotations if necessary
             directions = estimate_point_row_directions(points)
             # coordinates can be simply inverted
             points = [pts[::dir] for pts, dir in zip(points, directions)]
-            # directions need to be inverted *and* flipped (since they are a vector)
-            derivatives = [
-                der[::dir] * dir for der, dir in zip(derivatives, directions)
-            ]
 
             # extrapolate where nans are present by extending along the spline direction
             points = minimize_point_row_pair_distance(points, expected_dist=separation)
 
             masks = [~np.isnan(p[:, 0]) for p in points]  # just one dim is enough
-            points = extrapolate_point_rows_with_derivatives(
-                points, derivatives, separation
+            points = extrapolate_point_rows(
+                np.array(points)
             )
 
         return points, masks
@@ -198,6 +191,12 @@ class _SplineSurface(EventedModel):
         """Useful for debugging."""
         u = np.linspace(0, 1, 10) if u is None else u
         return [spline.sample(u=u) for spline in self._column_splines]
+
+    @classmethod
+    def from_segmentation(cls, segmentation: np.ndarray, **kwargs):
+        from .preprocess import get_label_paths_3d
+        component_points = get_label_paths_3d(segmentation)
+        return [cls(points=points, **kwargs) for points in component_points]
 
 
 class GriddedSplineSurface(_SplineSurface):
