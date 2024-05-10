@@ -27,7 +27,7 @@ dependencies = [
     "einops",
     "numpy",
     "psygnal",
-    "pydantic<2",
+    "pydantic",
     "scipy",
     "typing-extensions"
 ]
