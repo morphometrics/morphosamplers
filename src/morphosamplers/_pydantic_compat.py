@@ -14,7 +14,7 @@ try:
     )
     from pydantic.v1.generics import GenericModel
 except ImportError:
-    # pydantic v2
+    # pydantic v1
     from pydantic import (
         BaseModel,
         PrivateAttr,
