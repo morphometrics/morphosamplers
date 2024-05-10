@@ -1,3 +1,7 @@
+"""This is a pydantic v2 compatibility approach that uses pydantic.v1
+This implementation is using the work by Grzegorz Bokota @Czaki
+in the napari codebase: https://github.com/napari/napari/pull/6358
+"""
 try:
     # pydantic v2
     from pydantic.v1 import (
