@@ -2,8 +2,8 @@
 
 import numpy as np
 import pytest
-from pydantic import ValidationError
 
+from morphosamplers._pydantic_compat import ValidationError
 from morphosamplers.spline import NDimensionalSpline, Spline3D
 
 n_points = 10
@@ -127,9 +127,7 @@ def test_invalid_spline_derivatives(derivative_order):
         _ = spline_model.sample(u=0, derivative_order=derivative_order)
 
     with pytest.raises(ValueError):
-        _ = spline_model.sample(
-            separation=1, derivative_order=derivative_order
-        )
+        _ = spline_model.sample(separation=1, derivative_order=derivative_order)
 
 
 def test_spline_orientations():

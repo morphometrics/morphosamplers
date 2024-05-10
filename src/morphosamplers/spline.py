@@ -5,11 +5,17 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from psygnal import EventedModel
-from pydantic import PrivateAttr, conint, root_validator, validator
 from scipy.interpolate import splev, splprep
 from scipy.spatial.transform import Rotation, Slerp
 
-from .utils import coaxial_y_vectors_from_z_vectors, within_range, get_mask_limits
+from morphosamplers._pydantic_compat import (
+    PrivateAttr,
+    conint,
+    root_validator,
+    validator,
+)
+
+from .utils import coaxial_y_vectors_from_z_vectors, get_mask_limits, within_range
 
 
 class NDimensionalSpline(EventedModel):
@@ -63,17 +69,22 @@ class NDimensionalSpline(EventedModel):
         if spline_order is not None and n_samples <= spline_order:
             new_order = n_samples - 1
             warnings.warn(
-                f'Too few points for spline of order {spline_order}. '
-                f'Decreasing order to {new_order}'
+                f"Too few points for spline of order {spline_order}. "
+                f"Decreasing order to {new_order}"
             )
-            values['order'] = new_order
+            values["order"] = new_order
 
         return values
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Overwritten so that splines are recalculated when points are updated."""
         super().__setattr__(name, value)
-        if name in ("points", "order", "smoothing", "mask"):  # ensure splines stay in sync
+        if name in (
+            "points",
+            "order",
+            "smoothing",
+            "mask",
+        ):  # ensure splines stay in sync
             self._prepare_spline()
 
     def _prepare_spline(self) -> None:
@@ -114,9 +125,7 @@ class NDimensionalSpline(EventedModel):
 
         cumulative_distance /= self._length
 
-        self._tck, u = splprep(
-            samples.T, u=cumulative_distance, s=0, k=self.order
-        )
+        self._tck, u = splprep(samples.T, u=cumulative_distance, s=0, k=self.order)
 
     def sample(
         self,
@@ -157,9 +166,13 @@ class NDimensionalSpline(EventedModel):
         if (derivative_order < 0) or (derivative_order > self.order):
             raise ValueError("derivative order must be [0, spline_order]")
         if sum(arg is not None for arg in (u, separation, n_samples)) != 1:
-            raise ValueError("only one of u, separation or n_samples should be provided.")
+            raise ValueError(
+                "only one of u, separation or n_samples should be provided."
+            )
         if u is None:
-            u = self._get_equidistant_spline_coordinate_values(separation=separation, n_samples=n_samples)
+            u = self._get_equidistant_spline_coordinate_values(
+                separation=separation, n_samples=n_samples
+            )
 
         samples = splev(np.atleast_1d(u), self._tck, der=derivative_order)
         samples = np.stack(samples, axis=1)  # (n, d)
@@ -199,8 +212,10 @@ class NDimensionalSpline(EventedModel):
         elif separation is not None:
             n_samples = int(self._length / separation)
             if n_samples == 0:
-                raise ValueError(f'separation ({separation}) must be less than '
-                                 f'length ({self._length})')
+                raise ValueError(
+                    f"separation ({separation}) must be less than "
+                    f"length ({self._length})"
+                )
             if approximate:
                 remainder = 0
             else:
@@ -274,9 +289,13 @@ class Spline3D(NDimensionalSpline):
         Only one of u, separation or n_samples should be provided.
         """
         if sum(arg is not None for arg in (u, separation, n_samples)) != 1:
-            raise ValueError("only one of u, separation or n_samples should be provided.")
+            raise ValueError(
+                "only one of u, separation or n_samples should be provided."
+            )
         if u is None:
-            u = self._get_equidistant_spline_coordinate_values(separation=separation, n_samples=n_samples)
+            u = self._get_equidistant_spline_coordinate_values(
+                separation=separation, n_samples=n_samples
+            )
 
         rot = self._rotation_sampler(u)
         if rot.single:

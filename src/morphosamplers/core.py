@@ -1,7 +1,7 @@
 from abc import abstractmethod
-from typing import TypeVar, Protocol, Generic
+from typing import Generic, Protocol, TypeVar
 
-from pydantic.generics import GenericModel
+from morphosamplers._pydantic_compat import GenericModel
 
 M = TypeVar("M", bound="MorphoModel")
 S = TypeVar("S")

@@ -6,9 +6,15 @@ from typing import List, Optional, Tuple, Union
 import einops
 import numpy as np
 from psygnal import EventedModel
-from pydantic import PrivateAttr, conint, root_validator, validator
-from scipy.interpolate import splev, splprep, interp1d
+from scipy.interpolate import interp1d, splev, splprep
 from scipy.spatial.transform import Rotation
+
+from morphosamplers._pydantic_compat import (
+    PrivateAttr,
+    conint,
+    root_validator,
+    validator,
+)
 
 from .spline import Spline3D
 from .utils import (
@@ -135,9 +141,7 @@ class _SplineSurface(EventedModel):
             points = minimize_point_row_pair_distance(points, expected_dist=separation)
 
             masks = [~np.isnan(p[:, 0]) for p in points]  # just one dim is enough
-            points = extrapolate_point_rows(
-                np.array(points)
-            )
+            points = extrapolate_point_rows(np.array(points))
 
         return points, masks
 
@@ -170,8 +174,8 @@ class _SplineSurface(EventedModel):
             control_points = [p[:-1] for p in control_points]
 
         # _fix_spline_edges oversamples to avoid artifacts, so we only take every N points
-        control_points = np.stack(control_points)[:, ::self.oversampling]
-        self._raw_masks = np.stack(masks)[:, ::self.oversampling]
+        control_points = np.stack(control_points)[:, :: self.oversampling]
+        self._raw_masks = np.stack(masks)[:, :: self.oversampling]
 
         # stack points in the other direction, so we get the column-splines
         stacked = einops.rearrange(control_points, "row column xyz -> column row xyz")
@@ -195,6 +199,7 @@ class _SplineSurface(EventedModel):
     @classmethod
     def from_segmentation(cls, segmentation: np.ndarray, **kwargs):
         from .preprocess import get_label_paths_3d
+
         component_points = get_label_paths_3d(segmentation)
         return [cls(points=points, **kwargs) for points in component_points]
 
@@ -234,7 +239,7 @@ class GriddedSplineSurface(_SplineSurface):
                 "the surface in quasi-planar patches."
             )
         best_n = int(round(np.mean(n_points)))
-        u = np.linspace(0, 1, best_n)[::self.oversampling]
+        u = np.linspace(0, 1, best_n)[:: self.oversampling]
         # TODO: actually use non-approximate linspace (with remainder) so we get as close as possible to
         #       a real grid. The problem with this is that we won't reach exactly the last spline
 
@@ -245,7 +250,9 @@ class GriddedSplineSurface(_SplineSurface):
         # TODO: would be great to do this without the mean_u, but it seems impossible
         mean_raw_u = np.mean([s._raw_u for s in self._column_splines], axis=0)
         mask_begins = np.argmax(self._raw_masks, axis=1)
-        mask_ends = len(self._column_splines) - np.argmax(self._raw_masks[:, ::-1], axis=1)
+        mask_ends = len(self._column_splines) - np.argmax(
+            self._raw_masks[:, ::-1], axis=1
+        )
 
         begins_interp = interp1d(mean_raw_u, mask_begins)(u).round().astype(int)
         ends_interp = interp1d(mean_raw_u, mask_ends)(u).round().astype(int)
@@ -362,15 +369,27 @@ class GriddedSplineSurface(_SplineSurface):
             column_range = np.append(column_range, 0)
 
         # first half of triangles
-        first_index = np.repeat(row_range[:-1], columns - 1) * (columns - shift) + np.tile(column_range[:-1], rows - 1)
-        second_index = np.repeat(row_range[1:], columns - 1) * (columns - shift) + np.tile(column_range[:-1], rows - 1)
-        third_index = np.repeat(row_range[:-1], columns - 1) * (columns - shift) + np.tile(column_range[1:], rows - 1)
+        first_index = np.repeat(row_range[:-1], columns - 1) * (
+            columns - shift
+        ) + np.tile(column_range[:-1], rows - 1)
+        second_index = np.repeat(row_range[1:], columns - 1) * (
+            columns - shift
+        ) + np.tile(column_range[:-1], rows - 1)
+        third_index = np.repeat(row_range[:-1], columns - 1) * (
+            columns - shift
+        ) + np.tile(column_range[1:], rows - 1)
         triangles_1 = np.stack([first_index, second_index, third_index], axis=1)
 
         # second half
-        first_index = np.repeat(row_range[1:], columns - 1) * (columns - shift) + np.tile(column_range[:-1], rows - 1)
-        second_index = np.repeat(row_range[1:], columns - 1) * (columns - shift) + np.tile(column_range[1:], rows - 1)
-        third_index = np.repeat(row_range[:-1], columns - 1) * (columns - shift) + np.tile(column_range[1:], rows - 1)
+        first_index = np.repeat(row_range[1:], columns - 1) * (
+            columns - shift
+        ) + np.tile(column_range[:-1], rows - 1)
+        second_index = np.repeat(row_range[1:], columns - 1) * (
+            columns - shift
+        ) + np.tile(column_range[1:], rows - 1)
+        third_index = np.repeat(row_range[:-1], columns - 1) * (
+            columns - shift
+        ) + np.tile(column_range[1:], rows - 1)
         triangles_2 = np.stack([first_index, second_index, third_index], axis=1)
 
         all_triangles = np.concatenate([triangles_1, triangles_2])
@@ -406,12 +425,14 @@ class HexSplineSurface(_SplineSurface):
         us = []
         for i, spline in enumerate(self._column_splines):
             if i % 2:
-                us.append(np.linspace(0, 1, best_n)[::self.oversampling])
+                us.append(np.linspace(0, 1, best_n)[:: self.oversampling])
             else:
                 # need to account for specific offset given the euclidean length of each spline
                 # in order to get a nice grid
                 offset = self.separation / spline._length / 2
-                us.append(np.linspace(offset, 1 - offset, best_n - 1)[::self.oversampling])
+                us.append(
+                    np.linspace(offset, 1 - offset, best_n - 1)[:: self.oversampling]
+                )
 
         equidistant_points = [
             spline.sample(u) for spline, u in zip(self._column_splines, us)
@@ -422,7 +443,9 @@ class HexSplineSurface(_SplineSurface):
         # TODO: would be great to do this without the mean_u, but it seems impossible
         mean_raw_u = np.mean([s._raw_u for s in self._column_splines], axis=0)
         mask_begins = np.argmax(self._raw_masks, axis=1)
-        mask_ends = len(self._column_splines) - np.argmax(self._raw_masks[:, ::-1], axis=1)
+        mask_ends = len(self._column_splines) - np.argmax(
+            self._raw_masks[:, ::-1], axis=1
+        )
 
         begins_interp = interp1d(mean_raw_u, mask_begins)(us[1]).round().astype(int)
         ends_interp = interp1d(mean_raw_u, mask_ends)(us[1]).round().astype(int)
