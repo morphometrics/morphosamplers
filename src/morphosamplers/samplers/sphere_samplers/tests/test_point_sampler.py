@@ -1,13 +1,12 @@
 import numpy as np
 from scipy.spatial import KDTree
 
-from morphosamplers import MorphoModels
 from morphosamplers.samplers import sphere_samplers
-
+from morphosamplers import Sphere
 
 def test_point_sampler():
     """Should produce points with correct spacing on surface of sphere."""
-    sphere = MorphoModels.Sphere(center=(5, 5, 5), radius=10)
+    sphere = Sphere(center=(5, 5, 5), radius=10)
     sampler = sphere_samplers.PointSampler(spacing=2)
     points = sampler.sample(sphere)
 
@@ -24,7 +23,7 @@ def test_point_sampler():
 
 def test_pose_sampler():
     """Should produce poses oriented with Z normal to the surface of the sphere."""
-    sphere = MorphoModels.Sphere(center=(5, 5, 5), radius=10)
+    sphere = Sphere(center=(5, 5, 5), radius=10)
     sampler = sphere_samplers.PoseSampler(spacing=2)
     poses = sampler.sample(sphere)
 

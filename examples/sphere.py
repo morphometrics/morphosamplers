@@ -4,7 +4,7 @@ import numpy as np
 from morphosamplers import Sphere, sphere_samplers
 
 # create a sphere model
-sphere = MorphoModels.Sphere(center=(5, 5, 5), radius=20)
+sphere = Sphere(center=(5, 5, 5), radius=20)
 
 # create different types of samplers and use them to sample the sphere
 # points
