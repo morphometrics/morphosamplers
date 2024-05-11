@@ -1,5 +1,10 @@
 import numpy as np
-from pydantic import BaseModel, root_validator, validator
+
+try:
+    # we specifically need the v1 BaseModel and validators
+    from pydantic.v1 import BaseModel, root_validator, validator
+except ImportError:
+    from pydantic_compat  import BaseModel, root_validator, validator
 from typing import Union
 from typing_extensions import TypeAlias
 

@@ -27,7 +27,8 @@ dependencies = [
     "einops",
     "numpy",
     "psygnal",
-    "pydantic<2",
+    "pydantic",
+    "pydantic_compat ",
     "scipy",
     "typing-extensions"
 ]
@@ -139,6 +140,9 @@ minversion = "6.0"
 testpaths = ["tests"]
 filterwarnings = [
     "error",
+    # filtering pydantic v2 warnings for tests
+    "ignore::DeprecationWarning:pydantic",
+    "ignore::UserWarning:pydantic",
 ]
 
 # https://mypy.readthedocs.io/en/stable/config_file.html
