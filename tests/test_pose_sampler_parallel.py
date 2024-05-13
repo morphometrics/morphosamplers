@@ -2,13 +2,13 @@ import einops
 import numpy as np
 
 from morphosamplers.sample_types import PoseSet
-from morphosamplers.samplers.path_samplers import PathSamplers
-from morphosamplers.models import MorphoModels
+
+from morphosamplers import Path, path_samplers
 
 
 def test_instantiation():
-    sampler = PathSamplers.PoseSampler(spacing=5)
-    assert isinstance(sampler, PathSamplers.PoseSampler)
+    sampler = path_samplers.PoseSampler(spacing=5)
+    assert isinstance(sampler, path_samplers.PoseSampler)
 
 
 def test_sampling():
@@ -19,8 +19,8 @@ def test_sampling():
     x = y = np.zeros(shape=(n_points, ))
     z = np.linspace(0, total_length, num=n_points)
     control_points = einops.rearrange([x, y, z], 'xyz b -> b xyz')
-    path = MorphoModels.Path(control_points=control_points)
-    sampler = PathSamplers.PoseSampler(spacing=spacing)
+    path = Path(control_points=control_points)
+    sampler = path_samplers.PoseSampler(spacing=spacing)
     samples = sampler.sample(path)
 
     # positions should be an interpolation along z from 0 -> total_length
