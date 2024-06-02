@@ -141,7 +141,7 @@ testpaths = ["tests"]
 filterwarnings = [
     "error",
     # filtering pydantic v2 warning for tests, will work till v3
-    "ignore:.*`GenericModel` has been moved to `pydantic.BaseModel`:UserWarning",
+    "ignore:.*GenericModel` has been moved to `pydantic.BaseModel`:UserWarning",
 ]
 
 # https://mypy.readthedocs.io/en/stable/config_file.html
