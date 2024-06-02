@@ -142,6 +142,7 @@ filterwarnings = [
     "error",
     # filtering pydantic v2 warning for tests, will work till v3
     "ignore:.*GenericModel` has been moved to `pydantic.BaseModel`:UserWarning",
+    "ignore:.*Support for class-based `config` is deprecated:pydantic.warnings.PydanticDeprecatedSince20",
 ]
 
 # https://mypy.readthedocs.io/en/stable/config_file.html
