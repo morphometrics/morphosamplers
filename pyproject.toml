@@ -28,7 +28,7 @@ dependencies = [
     "numpy",
     "psygnal",
     "pydantic",
-    "pydantic_compat ",
+    "pydantic-compat",
     "scipy",
     "typing-extensions"
 ]
