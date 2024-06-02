@@ -30,7 +30,7 @@ dependencies = [
     "pydantic",
     "pydantic-compat",
     "scipy",
-    "typing-extensions"
+    "typing_extensions"
 ]
 
 # extras
