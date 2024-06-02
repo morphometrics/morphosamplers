@@ -6,7 +6,8 @@ from typing import List, Optional, Tuple, Union
 import einops
 import numpy as np
 from psygnal import EventedModel
-from pydantic import PrivateAttr, conint, root_validator, validator
+from pydantic import PrivateAttr, conint
+from pydantic_compat  import root_validator, validator
 from scipy.interpolate import splev, splprep, interp1d
 from scipy.spatial.transform import Rotation
 

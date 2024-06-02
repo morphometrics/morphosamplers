@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from typing import TypeVar, Protocol, Generic
 
+# this may warn, but works until v3
 from pydantic.generics import GenericModel
 
 M = TypeVar("M", bound="MorphoModel")

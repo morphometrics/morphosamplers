@@ -1,5 +1,5 @@
 import numpy as np
-from pydantic import validator
+from pydantic_compat  import validator
 
 from morphosamplers.core import MorphoModel
 
