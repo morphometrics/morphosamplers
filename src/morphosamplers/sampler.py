@@ -129,7 +129,7 @@ def place_sampling_grids(
 
 
 def sample_volume_at_coordinates(
-    volume: np.ndarray, coordinates: np.ndarray, interpolation_order: int = 3, fill_value=np.nan,
+    volume: np.ndarray, coordinates: np.ndarray, interpolation_order: int = 3, fill_value: float = np.nan,
 ) -> np.ndarray:
     """
     Sample a volume with spline interpolation at specific coordinates.
@@ -172,6 +172,7 @@ def sample_volume_along_spline(
     sampling_shape: Tuple[int, int] = (10, 10),
     sampling_spacing: float = 1,
     interpolation_order: int = 3,
+    fill_value: float = np.nan,
 ) -> np.ndarray:
     """
     Extract planes from a volume following a spline path.
@@ -198,6 +199,8 @@ def sample_volume_along_spline(
         Spacing between points in the sampling grid and along the spline.
     interpolation_order : int
         Spline order for image interpolation.
+    fill_value : float
+        Value to fill in for sample coordinates past the edges of the volume.
 
     Returns
     -------
@@ -211,7 +214,7 @@ def sample_volume_along_spline(
     grid = generate_2d_grid(grid_shape=sampling_shape, grid_spacing=(sampling_spacing, sampling_spacing))
     sampling_coords = place_sampling_grids(grid, positions, orientations)
     return sample_volume_at_coordinates(
-        volume, sampling_coords, interpolation_order=interpolation_order
+        volume, sampling_coords, interpolation_order=interpolation_order, fill_value=fill_value,
     )
 
 
@@ -222,6 +225,7 @@ def sample_subvolumes(
     grid_shape: Tuple[int, int, int] = (10, 10, 10),
     grid_spacing: Tuple[float, float, float] = (1, 1, 1),
     interpolation_order: int = 3,
+    fill_value: float = np.nan,
 ) -> np.ndarray:
     """
     Extract arbitrarily oriented subvolumes from a volume.
@@ -240,6 +244,8 @@ def sample_subvolumes(
         Spacing between points in the sampling grid.
     interpolation_order : int
         Spline order for image interpolation.
+    fill_value : float
+        Value to fill in for sample coordinates past the edges of the volume.
 
     Returns
     -------
@@ -249,7 +255,7 @@ def sample_subvolumes(
     grid = generate_3d_grid(grid_shape=grid_shape, grid_spacing=grid_spacing)
     sampling_coords = place_sampling_grids(grid, positions, orientations)
     return sample_volume_at_coordinates(
-        volume, sampling_coords, interpolation_order=interpolation_order
+        volume, sampling_coords, interpolation_order=interpolation_order, fill_value=fill_value,
     )
 
 
@@ -260,6 +266,7 @@ def sample_volume_around_surface(
     sampling_spacing: float,
     interpolation_order: int = 3,
     masked: bool = False,
+    fill_value: float = np.nan,
 ) -> np.ndarray:
     """
     Sample a volume around an arbitrary gridded surface.
@@ -287,6 +294,8 @@ def sample_volume_around_surface(
         Spacing between sampled pixels.
     interpolation_order : int
         Spline order for image interpolation.
+    fill_value : float
+        Value to fill in for sample coordinates past the edges of the volume.
 
     Returns
     -------
@@ -299,7 +308,7 @@ def sample_volume_around_surface(
     orientations = surface.sample_orientations()
     grid = generate_1d_grid(grid_shape=sampling_thickness, grid_spacing=sampling_spacing)
     sampling_coords = place_sampling_grids(grid, positions, orientations)
-    sampled = sample_volume_at_coordinates(volume, sampling_coords, interpolation_order=interpolation_order)
+    sampled = sample_volume_at_coordinates(volume, sampling_coords, interpolation_order=interpolation_order, fill_value=fill_value)
     if masked:
         sampled[~surface.mask] = np.nan
     return sampled.reshape(*surface.grid_shape, sampling_thickness)
