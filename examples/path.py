@@ -2,6 +2,7 @@ import numpy as np
 import napari
 
 from morphosamplers import Path, path_samplers
+from morphosamplers.samplers.path_samplers.pose_sampler_rings import RingPoseSampler
 
 # create some control points for a path
 xyz = np.linspace([0, 0, 0], [0, 0, 200], num=10)
@@ -23,11 +24,16 @@ parallel_poses = pose_sampler.sample(path)  # equally spaces parallel poses
 helical_pose_sampler = path_samplers.HelicalPoseSampler(spacing=10, twist=30)
 helical_poses = helical_pose_sampler.sample(path)  # poses related by 'twist' degrees
 
+# ring poses
+ring_pose_sampler = RingPoseSampler(spacing=10, points_on_ring=10, radius=20)
+ring_poses = ring_pose_sampler.sample(path)     # poses on the ring pointing outwards
+
 ### visualise
 viewer = napari.Viewer(ndisplay=3)
 
 # positions
 viewer.add_points(positions, size=5)
+viewer.add_points(ring_poses.positions, size=2, name='ring positions')
 
 # parallel poses
 viewer.add_vectors(
@@ -49,6 +55,7 @@ viewer.add_vectors(
     name='parallel pose y',
 )
 
+
 # helical poses
 viewer.add_vectors(
     data=np.stack(
@@ -68,6 +75,33 @@ viewer.add_vectors(
     edge_color='cornflowerblue',
     name='helical pose y',
 )
+
+
+# ring poses
+viewer.add_vectors(
+    data=np.stack(
+        [ring_poses.positions, ring_poses.orientations[:, :, 2]],
+        axis=1
+    ),
+    length=5,
+    edge_color='orange',
+    name='ring pose z'
+)
+viewer.add_vectors(
+    np.stack(
+        [ring_poses.positions, ring_poses.orientations[:, :, 1]],
+        axis=1
+    ),
+    length=2,
+    edge_color='cornflowerblue',
+    name='ring pose y',
+)
+
+
+for i in range(0, len(ring_poses.positions), ring_pose_sampler.points_on_ring):
+    ring_points = ring_poses.positions[i:i + ring_pose_sampler.points_on_ring]
+    viewer.add_shapes(ring_points, shape_type='polygon', edge_color='yellow', face_color='transparent', name=f'ring {i//ring_pose_sampler.points_on_ring}')
+
 
 # run napari
 napari.run()
