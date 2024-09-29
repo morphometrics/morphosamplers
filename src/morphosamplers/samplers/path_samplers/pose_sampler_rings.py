@@ -63,22 +63,42 @@ class RingPoseSampler(MorphoSampler):
         circle_xyz *= self.radius  # (n_points_per_ring, 3)
 
         # Rotate each point in the circle by each rotation
-        # target shape (n_points_per_ring, n_path_samples, 3)
-        orientations = einops.rearrange(orientations, 'n_path_samples i j -> 1 n_path_samples i j')
-        circle_xyz = einops.rearrange(circle_xyz, 'n_points_per_ring xyz -> n_points_per_ring 1 xyz 1')
-        rotated_circle_xyz = orientations @ circle_xyz  # (n_points_per_ring, n_path_samples, 3, 1)
-        rotated_circle_xyz = einops.rearrange(rotated_circle_xyz, 'b1 b2 i 1 -> b1 b2 i')
+        # target shape (n_path_samples, n_points_per_ring, 3)
+        # orientations = einops.rearrange(orientations, 'n_path_samples i j -> 1 n_path_samples i j')
+        # circle_xyz = einops.rearrange(circle_xyz, 'n_points_per_ring xyz -> n_points_per_ring 1 xyz 1')
+        circle_xyz = einops.rearrange(circle_xyz, 'n_points_per_ring xyz -> 1 xyz n_points_per_ring')
+        rotated_circle_xyz = orientations @ circle_xyz  # (n_points_per_ring, 3, n_path_samples)
+        # rotated_circle_xyz = einops.rearrange(rotated_circle_xyz, 'b1 b2 i 1 -> b1 b2 i')
+        rotated_circle_xyz = einops.rearrange(rotated_circle_xyz, 'b1 xyz b2 -> b1 b2 xyz')
 
         # place points around each path sample
-        final_positions = rotated_circle_xyz + path_sample_positions  # (n_points_per_ring, n_path_samples, 3)
+        path_sample_positions_for_ring = einops.rearrange(path_sample_positions, 'n xyz -> n 1 xyz')
+        final_positions = rotated_circle_xyz + path_sample_positions_for_ring # (n_path_samples, n_points_per_ring, 3)
 
-        ## ayse's job - construct the orientations for each particle
-        # finding vector to corrsponding path sample for each particle
+        repeated_path_sample_positions_for_vectors = einops.repeat(path_sample_positions, 'n xyz -> n b xyz', b=self.n_points_per_ring)
+
+        # Construct the orientations for each particle
         # - z vector pointing perpendicular to path
         # - y vector pointing along path
         # - x vector perpendicular to both
-        # construct (n_points_per_ring, n_path_samples, 3, 3) orientations
+        # (n_path_samples, n_points_per_ring, 3 ,3)
+        outward_z_vectors = final_positions - repeated_path_sample_positions_for_vectors
+        outward_z_vectors /= np.linalg.norm(outward_z_vectors, axis=2, keepdims=True)
+        repeated_path_z_vectors = einops.repeat(z_vectors, 'n xyz -> n b xyz', b=self.n_points_per_ring)
+        y_vectors = repeated_path_z_vectors # along the path, calculated above
+        y_vectors /= np.linalg.norm(y_vectors, axis=2, keepdims=True)
+        x_vectors = np.cross(outward_z_vectors, repeated_path_z_vectors)
+        x_vectors /= np.linalg.norm(x_vectors, axis=2, keepdims=True)
+
+        # Make the final_positions and final_orientations suitable for the PoseSet
+        final_positions = einops.rearrange(final_positions, 'b1 b2 xyz -> (b1 b2) xyz')
+        final_orientations = einops.rearrange([x_vectors, y_vectors, outward_z_vectors], 'v b1 b2 xyz -> (b1 b2) xyz v')
+
+
+        return PoseSet(positions=final_positions, orientations=final_orientations)
 
 
 
-        return PoseSet(positions=ring_positions, orientations=orientations)
+
+
+
