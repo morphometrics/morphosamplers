@@ -25,10 +25,10 @@ helical_pose_sampler = path_samplers.HelicalPoseSampler(spacing=10, twist=30)
 helical_poses = helical_pose_sampler.sample(path)  # poses related by 'twist' degrees
 
 # ring poses
-ring_pose_sampler = RingPoseSampler(spacing=60, n_points_per_ring=7, radius=20)
+ring_pose_sampler = RingPoseSampler(spacing=30, n_points_per_ring=10, radius=20)
 ring_poses = ring_pose_sampler.sample(path)     # poses on the ring pointing outwards
 
-## visualise
+### visualise
 viewer = napari.Viewer(ndisplay=3)
 
 # positions
@@ -92,15 +92,18 @@ viewer.add_vectors(
         [ring_poses.positions, ring_poses.orientations[:, :, 1]],
         axis=1
     ),
-    length=5,
+    length=2,
     edge_color='cornflowerblue',
     name='ring pose y',
 )
 
+# plot the rings
+n_rings = len(ring_poses.positions) // ring_pose_sampler.n_points_per_ring
 
-for i in range(0, len(ring_poses.positions), ring_pose_sampler.n_points_per_ring):
-    ring_points = ring_poses.positions[i:i + ring_pose_sampler.n_points_per_ring]
-    viewer.add_shapes(ring_points, shape_type='polygon', edge_color='yellow', face_color='transparent', name=f'ring {i//ring_pose_sampler.n_points_per_ring}')
+for ring_index in range(n_rings):
+    ring_points = ring_poses.positions[ring_index::n_rings]
+    viewer.add_shapes(ring_points, shape_type='polygon', edge_color='yellow',
+                      face_color='transparent', name=f'ring {ring_index}')
 
 # run napari
 napari.run()
