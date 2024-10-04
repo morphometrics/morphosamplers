@@ -1,5 +1,6 @@
 import napari
 import numpy as np
+import einops
 
 from morphosamplers import Dipole, dipole_samplers
 from morphosamplers.samplers.dipole_samplers import PoseSampler
@@ -17,8 +18,8 @@ pose_sampler = PoseSampler()
 poses = pose_sampler.sample(dipole)
 
 # create orientations for each of the disk points
-n_points_per_dipole = disk_positions.shape[0] // len(dipole.center)
-orientations = np.repeat(poses.orientations, n_points_per_dipole, axis=0)
+n_disk_points_per_dipole = disk_positions.shape[0] // len(dipole.center)
+orientations = einops.repeat(poses.orientations, 'b i j -> (b repeat) i j', repeat=n_disk_points_per_dipole)
 
 ### visualise
 viewer = napari.Viewer(ndisplay=3)
