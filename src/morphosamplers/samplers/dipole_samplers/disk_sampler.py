@@ -23,12 +23,12 @@ class DiskSampler(MorphoSampler):
         hexagon_x = hexagon_x[inside_circle]
         hexagon_y = hexagon_y[inside_circle]
         hexagon_z = np.zeros_like(hexagon_x)
-        hexagon_xyz = einops.rearrange([hexagon_x, hexagon_y, hexagon_z], 'xyz b -> b xyz')
+        hexagon_xyz = einops.rearrange([hexagon_x, hexagon_y, hexagon_z], 'xyz b -> b xyz 1')
         pose_sampler = PoseSampler()
         pose_set = pose_sampler.sample(obj)
         centers = pose_set.positions
         orientations = pose_set.orientations
-        rotated_points = hexagon_xyz @ orientations
+        rotated_points = orientations @ hexagon_xyz
+        rotated_points = einops.rearrange(rotated_points, 'b1 xyz 1 -> b1 xyz')
         final_points = rotated_points + centers
-        final_points = einops.rearrange(final_points, 'b1 b2 xyz -> (b1 b2) xyz')
         return final_points
