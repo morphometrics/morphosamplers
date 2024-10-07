@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from typing import TypeVar, Protocol, Generic
 
+from pydantic import ConfigDict
 # this may warn, but works until v3
 from pydantic.generics import GenericModel
 
@@ -10,10 +11,10 @@ S = TypeVar("S")
 
 class MorphoModel(GenericModel, Generic[M]):
     """A set of attributes defining a geometrical support."""
-
-    class Config:
-        allow_mutation = False
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        frozen=True,
+    )
 
 
 class SamplerProtocol(Protocol[M, S]):
@@ -30,6 +31,6 @@ SamplerType = TypeVar("SamplerType", bound=SamplerProtocol)
 
 class MorphoSampler(GenericModel, Generic[SamplerType]):
     """Concrete samplers should subclass this generic model."""
-
-    class Config:
-        allow_mutation = False
+    model_config = ConfigDict(
+        frozen=True,
+    )
