@@ -43,7 +43,7 @@ class RingPoseSampler(MorphoSampler):
         tangent_vectors = poses.orientations[:, :, 2] # along the path (parallel poses)
         y_vectors = einops.repeat(tangent_vectors, 'n xyz -> b n xyz', b=self.n_points_per_ring)
         y_vectors /= np.linalg.norm(y_vectors, axis=2, keepdims=True)
-        x_vectors = np.cross(z_vectors, y_vectors)
+        x_vectors = np.cross(y_vectors, z_vectors)
         x_vectors /= np.linalg.norm(x_vectors, axis=2, keepdims=True)
 
         # Make the final_positions and final_orientations suitable for the PoseSet
